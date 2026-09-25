@@ -96,10 +96,12 @@ export function calcDailyLimit(
   today: string,
 ): number {
   if (daysRemaining <= 0) return 0;
+  // amount > 0 = доход, amount < 0 = расход (как в UI)
+  // Доступно на траты = текущий баланс + будущий net − целевой остаток
   const futureNet = fixedEvents
     .filter((e) => e.eventDate > today)
     .reduce((s, e) => s + e.amount, 0);
-  return Math.max(0, (currentBalance - target - futureNet) / daysRemaining);
+  return Math.max(0, (currentBalance + futureNet - target) / daysRemaining);
 }
 
 export function nextStreak(
