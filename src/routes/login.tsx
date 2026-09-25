@@ -1,18 +1,25 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
-import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import {
+  authClient,
+  authEnabled,
+  signIn,
+} from "@/lib/auth/client";
+import { SOCIAL_PROVIDERS } from "@/lib/auth/providers";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
-export const Route = createFileRoute("/login")({ component: Login });
+export const Route = createFileRoute("/login")({
+  component: LoginPage,
+});
 
-function Login() {
+function LoginPage() {
   const { user, isPending } = useCurrentUserState();
   const [mode, setMode] = useState<"in" | "up">("in");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -25,7 +32,11 @@ function Login() {
     setError(null);
     try {
       if (mode === "up") {
-        const res = await authClient.signUp.email({ email, password, name: name || email.split("@")[0] });
+        const res = await authClient.signUp.email({
+          email,
+          password,
+          name: name || email.split("@")[0],
+        });
         if (res.error) throw new Error(res.error.message || "Ошибка регистрации");
       } else {
         const res = await authClient.signIn.email({ email, password });
@@ -39,21 +50,46 @@ function Login() {
     }
   }
 
+  async function onSocial(providerId: string, native?: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      if (native) {
+        // Native Better Auth social (Google, etc.)
+        await authClient.signIn.social({
+          provider: providerId as "google",
+          callbackURL: "/",
+        });
+      } else {
+        // Legacy Grok broker path (won't work on self-hosted)
+        await signIn(providerId, { callbackURL: "/" });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ошибка входа через соцсеть");
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-6 py-10">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">FinTracker PRO</p>
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
+        FinTracker PRO
+      </p>
       <h1 className="mt-2 font-display text-3xl">Контроль расходов без шума</h1>
-      <p className="mt-2 text-sm text-muted">Войдите, чтобы синхронизировать бюджет и конверты.</p>
+      <p className="mt-2 text-sm text-muted">
+        Войдите, чтобы синхронизировать бюджет и конверты.
+      </p>
 
       {authEnabled ? (
         <div className="mt-6 space-y-2">
-          {GROK_PROVIDERS.map((p) => (
+          {SOCIAL_PROVIDERS.map((p) => (
             <Button
               key={p.providerId}
               type="button"
               variant="secondary"
               className="w-full"
-              onClick={() => signIn(p.providerId, { callbackURL: "/" })}
+              disabled={busy}
+              onClick={() => onSocial(p.providerId, p.native)}
             >
               Продолжить с {p.label}
             </Button>
@@ -73,12 +109,22 @@ function Login() {
         {mode === "up" && (
           <div>
             <Label>Имя</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
+            />
           </div>
         )}
         <div>
           <Label>Email</Label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
         </div>
         <div>
           <Label>Пароль</Label>
