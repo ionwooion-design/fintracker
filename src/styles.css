@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Light — cool modern neutrals */
+  --color-bg: #e8ecef;
+  --color-surface: rgba(255, 255, 255, 0.72);
+  --color-elevated: rgba(255, 255, 255, 0.88);
+  --color-fg: #12151a;
+  --color-muted: #5c6570;
+  --color-subtle: #8a939e;
+  --color-border: rgba(18, 21, 26, 0.1);
+  --color-border-strong: rgba(18, 21, 26, 0.18);
+  --color-accent: #1a6b5c;
+  --color-accent-fg: #f4f7f6;
+  --color-ok: #1a6b5c;
+  --color-warn: #9a6b1a;
+  --color-danger: #a33a32;
+  --color-ring: #1a6b5c;
+  --color-glass: rgba(255, 255, 255, 0.55);
+  --color-glass-strong: rgba(255, 255, 255, 0.78);
+  --color-overlay: rgba(18, 21, 26, 0.4);
+
+  /* Sharp geometry — no rounded corners */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+}
+
+.dark {
+  --color-bg: #0b0d10;
+  --color-surface: rgba(22, 26, 32, 0.72);
+  --color-elevated: rgba(28, 34, 42, 0.88);
+  --color-fg: #e8ecef;
+  --color-muted: #9aa3ad;
+  --color-subtle: #6b7480;
+  --color-border: rgba(232, 236, 239, 0.1);
+  --color-border-strong: rgba(232, 236, 239, 0.18);
+  --color-accent: #3d9b88;
+  --color-accent-fg: #0b0d10;
+  --color-ok: #3d9b88;
+  --color-warn: #c9a04a;
+  --color-danger: #d07068;
+  --color-ring: #3d9b88;
+  --color-glass: rgba(22, 26, 32, 0.65);
+  --color-glass-strong: rgba(28, 34, 42, 0.85);
+  --color-overlay: rgba(0, 0, 0, 0.55);
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-bg);
+    color: var(--color-fg);
+    min-height: 100dvh;
+    line-height: 1.5;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  /* Force sharp corners globally for design system */
+  *, *::before, *::after {
+    border-radius: 0 !important;
+  }
+}
+
+/* Glassmorphism utility surfaces */
+.glass {
+  background: var(--color-glass);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--color-border);
+}
+
+.glass-strong {
+  background: var(--color-glass-strong);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  border: 1px solid var(--color-border-strong);
+}
+
+.glass-panel {
+  background: var(--color-surface);
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  border: 1px solid var(--color-border);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, var(--color-fg) 4%, transparent),
+    0 8px 24px color-mix(in oklab, var(--color-fg) 4%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

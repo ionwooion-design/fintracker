@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FinTracker PRO</string>
+    <string name="login">Войти</string>
+    <string name="register">Регистрация</string>
+    <string name="email">Email</string>
+    <string name="username">Имя пользователя</string>
+    <string name="password">Пароль</string>
+    <string name="forgot_password">Забыли пароль?</string>
+    <string name="remaining_today">Осталось на сегодня</string>
+    <string name="spent_today">Потрачено сегодня</string>
+    <string name="daily_plan">Дневной план</string>
+    <string name="current_balance">Текущий баланс</string>
+    <string name="days_remaining">Дней осталось</string>
+    <string name="target_balance">Целевой баланс</string>
+    <string name="savings_streak">Серия экономии</string>
+    <string name="envelopes">Конверты</string>
+    <string name="free_money">Свободные деньги</string>
+    <string name="manage_envelopes">Управление конвертами</string>
+    <string name="add_expense">Добавить расход</string>
+    <string name="statistics">Статистика</string>
+    <string name="settings">Настройки</string>
+    <string name="home">Главная</string>
+    <string name="ai_advisor">AI Советник</string>
+    <string name="sms_import">Импорт SMS</string>
+    <string name="privacy_policy_title">Политика конфиденциальности</string>
+    <string name="accept">Принять</string>
+    <string name="logout">Выйти</string>
+    <string name="save">Сохранить</string>
+    <string name="cancel">Отмена</string>
+    <string name="delete">Удалить</string>
+    <string name="edit">Редактировать</string>
+    <string name="confirm">Подтвердить</string>
+</resources>
