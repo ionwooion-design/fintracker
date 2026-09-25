@@ -1,5 +1,1 @@
-{
-  "deploy": {
-    "database": true
-  }
-}
+{"deploy":{"database":true}}

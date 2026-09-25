@@ -159,10 +159,17 @@ function Inner() {
  onSubmit={(e) => {
  e.preventDefault();
  const n = Number(eventAmt.replace(",", "."));
- if (!Number.isFinite(n) || !eventDesc.trim() || !eventDate) return;
- mut.saveEvent.mutate({ amount: n, description: eventDesc.trim(), eventDate });
+ if (!Number.isFinite(n) || n === 0 || !eventDesc.trim() || !eventDate) return;
+ mut.saveEvent.mutate(
+ { amount: n, description: eventDesc.trim(), eventDate },
+ {
+ onSuccess: () => {
  setEventAmt("");
  setEventDesc("");
+ setEventDate("");
+ },
+ },
+ );
  }}
  >
  <Label>Новое событие (минус = расход)</Label>
@@ -171,9 +178,12 @@ function Inner() {
  <Input inputMode="decimal" value={eventAmt} onChange={(e) => setEventAmt(e.target.value)} placeholder="Сумма" />
  <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
  </div>
- <Button type="submit" variant="secondary" className="w-full">
- Добавить событие
+ <Button type="submit" variant="secondary" className="w-full" disabled={mut.saveEvent.isPending}>
+ {mut.saveEvent.isPending ? "Добавляю…" : "Добавить событие"}
  </Button>
+ {mut.saveEvent.isError && (
+ <p className="text-sm text-danger">Не удалось добавить событие. Попробуйте ещё раз.</p>
+ )}
  </form>
  </Card>
 
