@@ -8,12 +8,29 @@ import { matchRule, parseSmsText } from "./sms";
 import type {
   Achievement,
   Category,
+  CurrencyCode,
   Envelope,
   FinanceSnapshot,
   FixedEvent,
   Transaction,
   UserSettings,
 } from "./types";
+
+const VALID_CURRENCIES = new Set([
+  "RUB",
+  "USD",
+  "EUR",
+  "GBP",
+  "KZT",
+  "BYN",
+  "UAH",
+  "CNY",
+]);
+
+function mapCurrency(raw: unknown): CurrencyCode {
+  const code = String(raw ?? "RUB").toUpperCase();
+  return (VALID_CURRENCIES.has(code) ? code : "RUB") as CurrencyCode;
+}
 
 function mapSettings(row: Record<string, unknown>, userId: string): UserSettings {
   return {
@@ -28,6 +45,7 @@ function mapSettings(row: Record<string, unknown>, userId: string): UserSettings
     lastBudgetDay: row.last_budget_day ? String(row.last_budget_day) : null,
     privacyAccepted: Boolean(row.privacy_accepted),
     darkTheme: Boolean(row.dark_theme),
+    currency: mapCurrency(row.currency),
   };
 }
 
@@ -241,10 +259,12 @@ export const saveSettings = createServerFn({ method: "POST" })
       finalTarget: number;
       darkTheme: boolean;
       privacyAccepted?: boolean;
+      currency?: CurrencyCode;
     }) => d,
   )
   .handler(async ({ context, data }) => {
     const sql = await getSql();
+    const currency = mapCurrency(data.currency ?? "RUB");
     await sql`
       update user_settings
       set user_name = ${data.userName},
@@ -254,6 +274,7 @@ export const saveSettings = createServerFn({ method: "POST" })
           final_target = ${data.finalTarget},
           dark_theme = ${data.darkTheme},
           privacy_accepted = coalesce(${data.privacyAccepted ?? null}, privacy_accepted),
+          currency = ${currency},
           updated_at = now()
       where user_id = ${context.userId}
     `;
@@ -496,7 +517,7 @@ export const askAdvisor = createServerFn({ method: "POST" })
     }
     const summary = [...byCat.entries()]
       .sort((a, b) => b[1] - a[1])
-      .map(([n, a]) => `${n}: ${Math.round(a)} ₽`)
+      .map(([n, a]) => `${n}: ${Number(a).toFixed(2)}`)
       .join("; ");
     const total = recent.reduce((s, t) => s + t.amount, 0);
 
@@ -518,7 +539,7 @@ export const askAdvisor = createServerFn({ method: "POST" })
           },
           {
             role: "user",
-            content: `За 30 дней расходы ${Math.round(total)} ₽. Разбивка: ${summary || "нет данных"}. Дневной лимит и конверты: ${snap.envelopes.map((e) => e.name + " " + e.budget).join(", ")}.`,
+            content: `За 30 дней расходы ${Number(total).toFixed(2)} ${snap.settings.currency || "RUB"}. Разбивка: ${summary || "нет данных"}. Дневной лимит и конверты: ${snap.envelopes.map((e) => e.name + " " + e.budget).join(", ")}.`,
           },
         ],
       }),

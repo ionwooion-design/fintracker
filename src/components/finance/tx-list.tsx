@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { CategoryIcon } from "@/lib/finance/icons";
-import { formatDayShort, formatRub } from "@/lib/utils";
-import type { Category, Envelope, Transaction } from "@/lib/finance/types";
+import { formatDayShort, formatMoney } from "@/lib/utils";
+import type { Category, CurrencyCode, Envelope, Transaction } from "@/lib/finance/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -10,6 +10,7 @@ export function TransactionList({
   groups,
   categories,
   envelopes,
+  currency = "RUB",
   onEdit,
   onDelete,
   onBulkDay,
@@ -17,6 +18,7 @@ export function TransactionList({
   groups: { date: string; items: Transaction[] }[];
   categories: Category[];
   envelopes: Envelope[];
+  currency?: CurrencyCode;
   onEdit: (t: Transaction) => void;
   onDelete: (id: number) => void;
   onBulkDay: (day: string) => void;
@@ -63,7 +65,7 @@ export function TransactionList({
                         className={`font-mono text-sm tabular-nums ${t.type === "income" ? "text-ok" : "text-fg"}`}
                       >
                         {t.type === "income" ? "+" : "−"}
-                        {formatRub(t.amount)}
+                        {formatMoney(t.amount, currency)}
                       </p>
                       <button type="button" className="p-1 text-muted" onClick={() => onEdit(t)} aria-label="Изменить">
                         <Pencil className="size-4" />

@@ -1,8 +1,14 @@
 import { useMemo, useState } from "react";
-import type { HeatmapDay } from "@/lib/finance/types";
-import { formatRub } from "@/lib/utils";
+import type { CurrencyCode, HeatmapDay } from "@/lib/finance/types";
+import { formatMoney } from "@/lib/utils";
 
-export function ExpenseHeatmap({ days }: { days: HeatmapDay[] }) {
+export function ExpenseHeatmap({
+  days,
+  currency = "RUB",
+}: {
+  days: HeatmapDay[];
+  currency?: CurrencyCode;
+}) {
   const [open, setOpen] = useState(false);
   const [tip, setTip] = useState<HeatmapDay | null>(null);
   const max = useMemo(() => Math.max(1, ...days.map((d) => d.amount)), [days]);
@@ -27,9 +33,9 @@ export function ExpenseHeatmap({ days }: { days: HeatmapDay[] }) {
                 <button
                   key={d.date}
                   type="button"
-                  title={`${d.date}: ${formatRub(d.amount)}`}
+                  title={`${d.date}: ${formatMoney(d.amount, currency)}`}
                   onClick={() => setTip(d)}
-                  className="aspect-square rounded-[4px] bg-accent"
+                  className="aspect-square bg-accent"
                   style={{ opacity }}
                 />
               );
@@ -37,7 +43,7 @@ export function ExpenseHeatmap({ days }: { days: HeatmapDay[] }) {
           </div>
           {tip && (
             <p className="mt-2 text-xs text-muted">
-              {tip.date}: {formatRub(tip.amount)}
+              {tip.date}: {formatMoney(tip.amount, currency)}
             </p>
           )}
         </div>

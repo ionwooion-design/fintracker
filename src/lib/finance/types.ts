@@ -1,5 +1,15 @@
 export type TxType = "income" | "expense";
 
+export type CurrencyCode =
+  | "RUB"
+  | "USD"
+  | "EUR"
+  | "GBP"
+  | "KZT"
+  | "BYN"
+  | "UAH"
+  | "CNY";
+
 export type UserSettings = {
   userId: string;
   userName: string;
@@ -12,7 +22,24 @@ export type UserSettings = {
   lastBudgetDay: string | null;
   privacyAccepted: boolean;
   darkTheme: boolean;
+  currency: CurrencyCode;
 };
+
+export const CURRENCIES: {
+  code: CurrencyCode;
+  symbol: string;
+  name: string;
+}[] = [
+  { code: "RUB", symbol: "₽", name: "Российский рубль" },
+  { code: "USD", symbol: "$", name: "Доллар США" },
+  { code: "EUR", symbol: "€", name: "Евро" },
+  { code: "GBP", symbol: "£", name: "Фунт стерлингов" },
+  { code: "KZT", symbol: "₸", name: "Казахстанский тенге" },
+  { code: "BYN", symbol: "Br", name: "Белорусский рубль" },
+  { code: "UAH", symbol: "₴", name: "Украинская гривна" },
+  { code: "CNY", symbol: "¥", name: "Китайский юань" },
+];
+
 
 export type Category = {
   id: number;

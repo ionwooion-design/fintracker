@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { useFinance, useFinanceMutations } from "@/lib/finance/use-finance";
-import { formatRub } from "@/lib/utils";
+import { formatMoney } from "@/lib/utils";
 import type { Envelope } from "@/lib/finance/types";
 
 export const Route = createFileRoute("/envelopes")({ component: Page });
@@ -29,6 +29,8 @@ function Inner() {
  const [editing, setEditing] = useState<Envelope | null>(null);
 
  if (isPending || !snapshot || !computed) {
+ const currency = snapshot.settings.currency ?? "RUB";
+
  return (
  <AppShell title="Конверты">
  <div className="h-40 animate-pulse bg-surface" />
@@ -36,13 +38,15 @@ function Inner() {
  );
  }
 
+ const currency = snapshot.settings.currency ?? "RUB";
+
  return (
  <AppShell title="Конверты">
  <ThemeSync snapshot={snapshot} />
  <div className="space-y-4">
  <div className="flex flex-wrap gap-3">
  {computed.envelopes.map((e) => (
- <EnvelopeCircle key={e.id} item={e} onClick={() => setEditing(e)} />
+ <EnvelopeCircle key={e.id} item={e} currency={currency} onClick={() => setEditing(e)} />
  ))}
  </div>
  <ul className="space-y-2">
@@ -51,7 +55,7 @@ function Inner() {
  <div>
  <p className="text-sm font-medium">{e.name}</p>
  <p className="text-xs text-muted">
- {formatRub(e.spent)} / {formatRub(e.budget)}
+ {formatMoney(e.spent, currency)} / {formatMoney(e.budget, currency)}
  {e.isOverBudget ? " · перерасход" : ""}
  </p>
  </div>

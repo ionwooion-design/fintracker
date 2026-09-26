@@ -5,7 +5,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { Card } from "@/components/ui/card";
 import { CategoryIcon } from "@/lib/finance/icons";
 import { useFinance } from "@/lib/finance/use-finance";
-import { formatRub } from "@/lib/utils";
+import { formatMoney } from "@/lib/utils";
 import { ThemeSync } from "@/components/theme-sync";
 
 export const Route = createFileRoute("/stats")({ component: StatsPage });
@@ -27,6 +27,7 @@ function StatsInner() {
  </AppShell>
  );
  }
+ const currency = snapshot.settings.currency ?? "RUB";
  const total = computed.categoryBreakdown.reduce((s, c) => s + c.amount, 0);
  const pie = computed.categoryBreakdown.map((c) => ({
  name: c.category.name,
@@ -40,7 +41,7 @@ function StatsInner() {
  <div className="space-y-4">
  <Card>
  <h2 className="font-display text-lg">По категориям</h2>
- <p className="text-sm text-muted">Всего {formatRub(total)}</p>
+ <p className="text-sm text-muted">Всего {formatMoney(total, currency)}</p>
  {pie.length === 0 ? (
  <p className="mt-4 text-sm text-muted">Пока нет расходов за период.</p>
  ) : (
@@ -52,7 +53,7 @@ function StatsInner() {
  <Cell key={p.name} fill={p.color} />
  ))}
  </Pie>
- <Tooltip formatter={(v) => formatRub(Number(v))} />
+ <Tooltip formatter={(v) => formatMoney(Number(v, currency))} />
  </PieChart>
  </ResponsiveContainer>
  </div>
@@ -63,7 +64,7 @@ function StatsInner() {
  <span className="size-2.5 " style={{ background: c.category.color }} />
  <CategoryIcon name={c.category.icon} className="size-4" />
  <span className="flex-1">{c.category.name}</span>
- <span className="font-mono tabular-nums">{formatRub(c.amount)}</span>
+ <span className="font-mono tabular-nums">{formatMoney(c.amount, currency)}</span>
  <span className="w-10 text-right text-xs text-muted">{c.percent.toFixed(0)}%</span>
  </li>
  ))}
@@ -78,7 +79,7 @@ function StatsInner() {
  <LineChart data={computed.projection}>
  <XAxis dataKey="date" hide />
  <YAxis hide />
- <Tooltip formatter={(v) => formatRub(Number(v))} />
+ <Tooltip formatter={(v) => formatMoney(Number(v, currency))} />
  <ReferenceLine y={snapshot.settings.finalTarget} stroke="var(--color-muted)" strokeDasharray="4 4" />
  <Line type="monotone" dataKey="projectedBalance" stroke="var(--color-accent)" strokeWidth={2} dot={false} />
  </LineChart>

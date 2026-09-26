@@ -30,6 +30,7 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
       initialBalance: snapshot.settings.initialBalance,
       finalTarget: snapshot.settings.finalTarget,
       darkTheme: next,
+      currency: snapshot.settings.currency ?? "RUB",
     });
   };
 

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import { useFinance, useFinanceMutations } from "@/lib/finance/use-finance";
-import { formatRub } from "@/lib/utils";
+import { formatMoney } from "@/lib/utils";
 import type { Transaction } from "@/lib/finance/types";
 import { Link } from "@tanstack/react-router";
 
@@ -50,6 +50,7 @@ function Dashboard() {
  );
  }
 
+ const currency = snapshot.settings.currency ?? "RUB";
  const bar = Math.min(100, computed.progressPercent) / 100;
  const barColor =
  computed.progressTone === "green"
@@ -62,28 +63,28 @@ function Dashboard() {
  <AppShell title="Сегодня">
  <ThemeSync snapshot={snapshot} />
  <div className="space-y-4">
- <Card className="p-5">
+ <Card className="p-5 shadow-sm">
  <p className="text-xs font-medium uppercase tracking-wide text-muted">Осталось на сегодня</p>
- <p className="mt-1 font-display text-4xl tabular-nums tracking-tight">
- {formatRub(computed.remainingToday)}
+ <p className="mt-1 font-display text-4xl tabular-nums tracking-tight text-fg">
+ {formatMoney(computed.remainingToday, currency)}
  </p>
- <div className="mt-4 h-2 overflow-hidden bg-elevated">
+ <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-elevated">
  <div
- className="h-full transition-[width] duration-300"
+ className="h-full rounded-full transition-[width] duration-300"
  style={{ width: `${bar * 100}%`, background: barColor }}
  />
  </div>
  <p className="mt-2 text-xs text-muted">
- Лимит {formatRub(computed.dailyLimit)} · потрачено {formatRub(computed.spentToday)}
+ Лимит {formatMoney(computed.dailyLimit, currency)} · потрачено {formatMoney(computed.spentToday, currency)}
  </p>
  </Card>
 
  <div className="grid grid-cols-2 gap-2">
- <Stat label="Дневной план" value={formatRub(computed.dailyLimit)} />
- <Stat label="Потрачено" value={formatRub(computed.spentToday)} />
- <Stat label="Баланс" value={formatRub(computed.currentBalance)} />
+ <Stat label="Дневной план" value={formatMoney(computed.dailyLimit, currency)} />
+ <Stat label="Потрачено" value={formatMoney(computed.spentToday, currency)} />
+ <Stat label="Баланс" value={formatMoney(computed.currentBalance, currency)} />
  <Stat label="Дней осталось" value={String(computed.daysRemaining)} />
- <Stat label="Цель" value={formatRub(snapshot.settings.finalTarget)} />
+ <Stat label="Цель" value={formatMoney(snapshot.settings.finalTarget, currency)} />
  <Stat label="Серия" value={`${computed.currentStreak} дн.`} />
  </div>
 
@@ -101,10 +102,10 @@ function Dashboard() {
  </div>
  <div className="flex gap-2 overflow-x-auto pb-1">
  {computed.envelopes.map((e) => (
- <EnvelopeCircle key={e.id} item={e} />
+ <EnvelopeCircle key={e.id} item={e} currency={currency} />
  ))}
  </div>
- <p className="mt-3 text-xs text-muted">Свободные: {formatRub(computed.freeMoney)}</p>
+ <p className="mt-3 text-xs text-muted">Свободные: {formatMoney(computed.freeMoney, currency)}</p>
  </Card>
 
  <Card>
@@ -140,6 +141,7 @@ function Dashboard() {
  <h2 className="mb-3 font-display text-lg">История</h2>
  <TransactionList
  groups={computed.transactionsByDay}
+         currency={currency}
  categories={snapshot.categories}
  envelopes={snapshot.envelopes}
  onEdit={setEdit}
@@ -149,7 +151,7 @@ function Dashboard() {
  </Card>
 
  <Card>
- <ExpenseHeatmap days={computed.heatmap} />
+ <ExpenseHeatmap days={computed.heatmap} currency={currency} />
  </Card>
  </div>
 

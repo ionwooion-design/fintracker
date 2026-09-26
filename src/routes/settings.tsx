@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { useFinance, useFinanceMutations } from "@/lib/finance/use-finance";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { CURRENCIES, type CurrencyCode } from "@/lib/finance/types";
+import { formatMoney } from "@/lib/utils";
 
 export const Route = createFileRoute("/settings")({ component: Page });
 
@@ -29,6 +31,7 @@ function Inner() {
  const [initial, setInitial] = useState("");
  const [target, setTarget] = useState("");
  const [dark, setDark] = useState(false);
+ const [currency, setCurrency] = useState<CurrencyCode>("RUB");
  const [eventDesc, setEventDesc] = useState("");
  const [eventAmt, setEventAmt] = useState("");
  const [eventDate, setEventDate] = useState("");
@@ -42,6 +45,7 @@ function Inner() {
  setInitial(String(snapshot.settings.initialBalance));
  setTarget(String(snapshot.settings.finalTarget));
  setDark(snapshot.settings.darkTheme);
+ setCurrency(snapshot.settings.currency ?? "RUB");
  }, [snapshot, user?.displayName]);
 
  if (isPending || !snapshot) {
@@ -106,6 +110,31 @@ function Inner() {
               />
             </button>
           </label>
+
+ <div className="mt-4">
+ <Label>Валюта</Label>
+ <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+ {CURRENCIES.map((c) => (
+ <button
+ key={c.code}
+ type="button"
+ onClick={() => setCurrency(c.code)}
+ className={`flex min-h-11 items-center gap-2 border px-3 py-2 text-left text-sm transition-colors ${
+ currency === c.code
+ ? "border-accent bg-accent text-accent-fg"
+ : "border-border bg-elevated text-fg hover:border-border-strong"
+ }`}
+ >
+ <span className="text-base font-semibold tabular-nums">{c.symbol}</span>
+ <span className="truncate text-xs opacity-90">{c.code}</span>
+ </button>
+ ))}
+ </div>
+ <p className="mt-2 text-xs text-muted">
+ Пример: {formatMoney(12345.67, currency)}
+ </p>
+ </div>
+
  <Button
  className="mt-4 w-full"
  disabled={mut.saveSettings.isPending}
@@ -118,6 +147,7 @@ function Inner() {
  finalTarget: Number(target.replace(",", ".")),
  darkTheme: dark,
  privacyAccepted: true,
+ currency,
  })
  }
  >
@@ -146,7 +176,7 @@ function Inner() {
  {ev.eventDate} · {ev.description}
  </span>
  <span className="flex items-center gap-2 font-mono tabular-nums">
- {ev.amount} ₽
+ {formatMoney(ev.amount, currency)}
  <button type="button" className="text-danger" onClick={() => mut.deleteEvent.mutate({ id: ev.id })}>
  Удалить
  </button>

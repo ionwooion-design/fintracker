@@ -66,7 +66,7 @@ export function computeDashboard(
     currentStreak: settings.currentStreak,
     envelopes: envelopeRows,
     freeMoney,
-    aiTip: localTip(progressPercent, remainingToday),
+    aiTip: localTip(progressPercent, remainingToday, settings.currency),
     transactionsByDay,
     heatmap: buildHeatmap(transactions, today),
     categoryBreakdown: categoryBreakdown(transactions, categories, settings.startDate, today),
@@ -119,10 +119,21 @@ export function nextStreak(
   return { streak: 1, lastBudgetDay: today };
 }
 
-function localTip(progress: number, remaining: number): string {
+function localTip(
+  progress: number,
+  remaining: number,
+  currency: string = "RUB",
+): string {
+  // Lazy import avoided — format inline with 2 decimals
+  const formatted = new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: currency || "RUB",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(remaining);
   if (progress >= 100) return "Дневной лимит превышен. Завтра начните с более скромного плана.";
-  if (progress >= 85) return `Вы близко к лимиту. Осталось ${Math.round(remaining)} ₽ — тратьте осознанно.`;
-  if (progress >= 50) return `Хороший темп. На сегодня ещё ${Math.round(remaining)} ₽.`;
+  if (progress >= 85) return `Вы близко к лимиту. Осталось ${formatted} — тратьте осознанно.`;
+  if (progress >= 50) return `Хороший темп. На сегодня ещё ${formatted}.`;
   if (progress > 0) return "Отличный контроль: потрачено меньше половины дневного лимита.";
   return "Новый день. Сначала решите, какие траты действительно нужны.";
 }

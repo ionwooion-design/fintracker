@@ -1,12 +1,14 @@
 import { CategoryIcon } from "@/lib/finance/icons";
-import { formatRub } from "@/lib/utils";
-import type { EnvelopeWithSpent } from "@/lib/finance/types";
+import { formatMoney } from "@/lib/utils";
+import type { CurrencyCode, EnvelopeWithSpent } from "@/lib/finance/types";
 
 export function EnvelopeCircle({
   item,
+  currency = "RUB",
   onClick,
 }: {
   item: EnvelopeWithSpent;
+  currency?: CurrencyCode;
   onClick?: () => void;
 }) {
   const r = 18;
@@ -39,7 +41,7 @@ export function EnvelopeCircle({
         <CategoryIcon name={item.icon} className="size-5 text-fg" />
       </span>
       <span className="line-clamp-1 text-xs font-medium">{item.name}</span>
-      <span className="font-mono text-[11px] tabular-nums text-muted">{formatRub(item.remaining)}</span>
+      <span className="font-mono text-[11px] tabular-nums text-muted">{formatMoney(item.remaining, currency)}</span>
     </button>
   );
 }
