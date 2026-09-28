@@ -33,6 +33,13 @@ export function computeDashboard(
     fixedEvents,
     today,
   );
+  const spentToday = transactions
+    .filter((t) => t.transactionDate === today && t.type === "expense")
+    .reduce((s, t) => s + t.amount, 0);
+  const incomeToday = transactions
+    .filter((t) => t.transactionDate === today && t.type === "income")
+    .reduce((s, t) => s + t.amount, 0);
+  // Calendar days from today to endDate (0 if same day). Displayed as «дней осталось».
   const daysRemaining = Math.max(0, daysBetween(today, settings.endDate));
   const dailyLimit = calcDailyLimit(
     currentBalance,
@@ -42,10 +49,9 @@ export function computeDashboard(
     today,
     recurring,
     settings.endDate,
+    spentToday,
+    incomeToday,
   );
-  const spentToday = transactions
-    .filter((t) => t.transactionDate === today && t.type === "expense")
-    .reduce((s, t) => s + t.amount, 0);
   const remainingToday = dailyLimit - spentToday;
   const progressPercent =
     dailyLimit <= 0
@@ -122,6 +128,7 @@ export function computeDashboard(
       fixedEvents,
       today,
       recurring,
+      spentToday,
     ),
   };
 }
@@ -148,33 +155,50 @@ export function calcCurrentBalance(
   return initial + incomeTx + fixedIncome - expenseTx - fixedExpense;
 }
 
+/**
+ * Daily spending allowance so that by endDate the balance reaches `target`.
+ *
+ * @param daysToEnd - daysBetween(today, endDate); 0 means today is the last day
+ * @param spentToday / incomeToday - used to recover start-of-day balance
+ *   (currentBalance already nets today's txs — without this, remainingToday double-counts)
+ *
+ * Spending days are **inclusive**: today … endDate → daysToEnd + 1.
+ */
 export function calcDailyLimit(
   currentBalance: number,
   target: number,
   fixedEvents: FixedEvent[],
-  daysRemaining: number,
+  daysToEnd: number,
   today: string,
   recurring: RecurringTransaction[] = [],
   endDate?: string,
+  spentToday = 0,
+  incomeToday = 0,
 ): number {
-  if (daysRemaining <= 0) return 0;
+  // Period already over
+  if (daysToEnd < 0) {
+    return Math.max(0, currentBalance - target);
+  }
+
+  // Inclusive day count: today and every day through endDate
+  const spendingDays = daysToEnd + 1;
+
+  // Balance as of start of today (before today's income/expense transactions)
+  const startOfDayBalance = currentBalance + spentToday - incomeToday;
 
   const futureFixedNet = fixedEvents
     .filter((e) => e.eventDate > today)
     .reduce((s, e) => s + e.amount, 0);
 
-  const horizon = endDate ?? addDaysISO(today, daysRemaining);
+  const horizon = endDate ?? addDaysISO(today, daysToEnd);
   const futureRecurring = expandRecurringOccurrences(recurring, today, horizon);
   const futureRecurringNet = futureRecurring.reduce(
     (s, o) => s + (o.type === "income" ? o.amount : -o.amount),
     0,
   );
 
-  return Math.max(
-    0,
-    (currentBalance + futureFixedNet + futureRecurringNet - target) /
-      daysRemaining,
-  );
+  const pool = startOfDayBalance + futureFixedNet + futureRecurringNet - target;
+  return Math.max(0, pool / spendingDays);
 }
 
 export function nextStreak(
@@ -401,6 +425,12 @@ function categoryBreakdown(
     .sort((a, b) => b.amount - a.amount);
 }
 
+/**
+ * Project balance if the daily plan is followed through endDate.
+ * currentBalance already includes today's transactions and fixed events with date <= today.
+ * - Today: only the *remaining* allowance may still be spent (dailyLimit - spentToday)
+ * - Future days: full dailyLimit is assumed spent; fixed/recurring for that day applied
+ */
 function projectBalance(
   currentBalance: number,
   dailyLimit: number,
@@ -408,16 +438,14 @@ function projectBalance(
   fixedEvents: FixedEvent[],
   today: string,
   recurring: RecurringTransaction[] = [],
+  spentToday = 0,
 ): ProjectionPoint[] {
   const points: ProjectionPoint[] = [];
   let balance = currentBalance;
   let date = today;
 
-  const recurringOcc = expandRecurringOccurrences(
-    recurring,
-    addDaysISO(today, -1),
-    endDate,
-  );
+  // Occurrences strictly after today (today's recurring already in transactions if auto-created)
+  const recurringOcc = expandRecurringOccurrences(recurring, today, endDate);
   const recByDate = new Map<string, number>();
   for (const o of recurringOcc) {
     const signed = o.type === "income" ? o.amount : -o.amount;
@@ -425,12 +453,18 @@ function projectBalance(
   }
 
   while (date <= endDate) {
-    const dayFixed = fixedEvents
-      .filter((e) => e.eventDate === date)
-      .reduce((s, e) => s + e.amount, 0);
-    const dayRec = recByDate.get(date) ?? 0;
-    balance += dayFixed + dayRec;
-    if (date > today) balance -= dailyLimit;
+    if (date === today) {
+      // Fixed events for today already in currentBalance; do not re-add.
+      // Assume user spends the rest of today's allowance.
+      balance -= Math.max(0, dailyLimit - spentToday);
+    } else {
+      const dayFixed = fixedEvents
+        .filter((e) => e.eventDate === date)
+        .reduce((s, e) => s + e.amount, 0);
+      const dayRec = recByDate.get(date) ?? 0;
+      balance += dayFixed + dayRec;
+      balance -= dailyLimit;
+    }
     points.push({ date, projectedBalance: balance });
     date = addDaysISO(date, 1);
   }

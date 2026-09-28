@@ -416,6 +416,9 @@ async function buildUnlockContext(userId: string, snap: FinanceSnapshot, extra?:
   const spentToday = snap.transactions
     .filter((t) => t.transactionDate === today && t.type === "expense")
     .reduce((s, t) => s + t.amount, 0);
+  const incomeToday = snap.transactions
+    .filter((t) => t.transactionDate === today && t.type === "income")
+    .reduce((s, t) => s + t.amount, 0);
   const balance = calcCurrentBalance(
     snap.settings.initialBalance,
     snap.transactions,
@@ -436,6 +439,10 @@ async function buildUnlockContext(userId: string, snap: FinanceSnapshot, extra?:
     snap.fixedEvents,
     daysRemaining,
     today,
+    snap.recurring ?? [],
+    snap.settings.endDate,
+    spentToday,
+    incomeToday,
   );
   const underBudgetToday = spentToday <= dailyLimit;
   // envelope usage
@@ -497,6 +504,9 @@ async function refreshStreak(userId: string) {
   const spentToday = snap.transactions
     .filter((t) => t.transactionDate === today && t.type === "expense")
     .reduce((s, t) => s + t.amount, 0);
+  const incomeToday = snap.transactions
+    .filter((t) => t.transactionDate === today && t.type === "income")
+    .reduce((s, t) => s + t.amount, 0);
   const balance = calcCurrentBalance(
     snap.settings.initialBalance,
     snap.transactions,
@@ -517,6 +527,10 @@ async function refreshStreak(userId: string) {
     snap.fixedEvents,
     daysRemaining,
     today,
+    snap.recurring ?? [],
+    snap.settings.endDate,
+    spentToday,
+    incomeToday,
   );
   const next = nextStreak(
     snap.settings.currentStreak,
