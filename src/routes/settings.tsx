@@ -264,6 +264,10 @@ function Inner() {
 
         <Card>
           <h2 className="font-display text-lg">Бюджетный период</h2>
+          <p className="mt-1 text-xs text-muted">
+            За 3 дня до конца и в день окончания периода на главной появится
+            баннер с предложением начать новый период.
+          </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div>
               <Label>Начало</Label>
@@ -338,6 +342,23 @@ function Inner() {
           >
             Сохранить все настройки
           </Button>
+        </Card>
+
+        <Card>
+          <h2 className="font-display text-lg">Уведомления о лимите</h2>
+          <ul className="mt-2 space-y-1.5 text-sm text-muted">
+            <li>· При достижении 80% дневного лимита — предупреждение</li>
+            <li>· При превышении дневного лимита — уведомление об ошибке</li>
+            <li>· При перерасходе конверта — отдельное уведомление</li>
+            <li>
+              · За 3 дня до конца периода и после его окончания — баннер с
+              предложением начать новый период
+            </li>
+          </ul>
+          <p className="mt-2 text-xs text-subtle">
+            Уведомления показываются в приложении (toast). Повторы в рамках
+            одной сессии не дублируются.
+          </p>
         </Card>
 
         <CategoryManager

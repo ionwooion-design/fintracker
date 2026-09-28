@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { PrivacyGate } from "@/components/privacy-gate";
@@ -45,6 +46,18 @@ function RootDocument() {
           <QueryClientProvider client={queryClient}>
             <PrivacyGate>
               <Outlet />
+              <Toaster
+                position="top-center"
+                richColors
+                closeButton
+                toastOptions={{
+                  classNames: {
+                    toast: "font-sans text-sm",
+                    title: "font-medium",
+                    description: "text-xs opacity-90",
+                  },
+                }}
+              />
             </PrivacyGate>
           </QueryClientProvider>
         </AuthProvider>

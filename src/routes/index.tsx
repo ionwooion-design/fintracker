@@ -4,6 +4,10 @@ import { Bot, MessageSquareText, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { AuthGuard } from "@/components/auth-guard";
 import { AddExpenseForm } from "@/components/finance/add-expense";
+import {
+  BudgetAlerts,
+  notifyAfterExpense,
+} from "@/components/finance/budget-alerts";
 import { EnvelopeCircle } from "@/components/finance/envelope-circle";
 import { ExpenseHeatmap } from "@/components/finance/heatmap";
 import { EditTxDialog, TransactionList } from "@/components/finance/tx-list";
@@ -63,6 +67,8 @@ function Dashboard() {
  <AppShell title="Сегодня">
  <ThemeSync snapshot={snapshot} />
  <div className="space-y-4">
+ <BudgetAlerts snapshot={snapshot} computed={computed} />
+
  <Card className="p-5 shadow-sm">
  <p className="text-xs font-medium uppercase tracking-wide text-muted">Осталось на сегодня</p>
  <p className="mt-1 font-display text-4xl tabular-nums tracking-tight text-fg">
@@ -115,7 +121,35 @@ function Dashboard() {
  categories={snapshot.categories}
  envelopes={snapshot.envelopes}
  pending={mut.addTx.isPending}
- onAdd={(d) => mut.addTx.mutate(d)}
+ onAdd={(d) => {
+   mut.addTx.mutate(d, {
+     onSuccess: () => {
+       // Approximate post-add remaining for instant feedback
+       const nextSpent =
+         d.type === "expense" && d.transactionDate === new Date().toISOString().slice(0, 10)
+           ? computed.spentToday + d.amount
+           : computed.spentToday;
+       const remaining = computed.dailyLimit - nextSpent;
+       let envName: string | null = null;
+       let envRem: number | null = null;
+       if (d.envelopeId != null) {
+         const env = computed.envelopes.find((e) => e.id === d.envelopeId);
+         if (env) {
+           envName = env.name;
+           envRem = env.remaining - (d.type === "expense" ? d.amount : 0);
+         }
+       }
+       notifyAfterExpense({
+         amount: d.amount,
+         remainingToday: remaining,
+         dailyLimit: computed.dailyLimit,
+         currency,
+         envelopeName: envName,
+         envelopeRemaining: envRem,
+       });
+     },
+   });
+ }}
  />
  </Card>
 
