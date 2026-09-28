@@ -8,8 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { useFinance, useFinanceMutations } from "@/lib/finance/use-finance";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { CURRENCIES, type CurrencyCode } from "@/lib/finance/types";
+import { CURRENCIES, type CurrencyCode, type RecurringTransaction } from "@/lib/finance/types";
 import { formatMoney } from "@/lib/utils";
+import { RecurringForm, RecurringList } from "@/components/finance/recurring-form";
 
 export const Route = createFileRoute("/settings")({ component: Page });
 
@@ -36,6 +37,8 @@ function Inner() {
  const [eventAmt, setEventAmt] = useState("");
  const [eventDate, setEventDate] = useState("");
  const [filter, setFilter] = useState<"all" | "in" | "out">("all");
+ const [editingRecurring, setEditingRecurring] = useState<RecurringTransaction | null>(null);
+ const [showRecurringForm, setShowRecurringForm] = useState(false);
 
  useEffect(() => {
  if (!snapshot) return;
@@ -215,6 +218,70 @@ function Inner() {
  <p className="text-sm text-danger">Не удалось добавить событие. Попробуйте ещё раз.</p>
  )}
  </form>
+ </Card>
+
+ <Card>
+ <div className="mb-3 flex items-center justify-between gap-2">
+ <h2 className="font-display text-lg">Повторяющиеся</h2>
+ {!showRecurringForm && (
+ <Button
+ type="button"
+ variant="secondary"
+ size="sm"
+ onClick={() => {
+ setEditingRecurring(null);
+ setShowRecurringForm(true);
+ }}
+ >
+ Добавить
+ </Button>
+ )}
+ </div>
+
+ {(showRecurringForm || editingRecurring) && (
+ <div className="mb-4 rounded-[12px] border border-border bg-surface p-3">
+ <RecurringForm
+ categories={snapshot.categories}
+ envelopes={snapshot.envelopes}
+ currency={currency}
+ pending={mut.saveRecurring.isPending}
+ initial={editingRecurring}
+ onCancel={() => {
+ setShowRecurringForm(false);
+ setEditingRecurring(null);
+ }}
+ onSubmit={(data) => {
+ mut.saveRecurring.mutate(data, {
+ onSuccess: () => {
+ setShowRecurringForm(false);
+ setEditingRecurring(null);
+ },
+ });
+ }}
+ />
+ {mut.saveRecurring.isError && (
+ <p className="mt-2 text-sm text-danger">Не удалось сохранить. Попробуйте ещё раз.</p>
+ )}
+ </div>
+ )}
+
+ <RecurringList
+ items={snapshot.recurring ?? []}
+ currency={currency}
+ pendingId={
+ mut.pauseRecurring.isPending || mut.deleteRecurring.isPending
+ ? (mut.pauseRecurring.variables as { id?: number } | undefined)?.id ??
+ (mut.deleteRecurring.variables as { id?: number } | undefined)?.id ??
+ null
+ : null
+ }
+ onEdit={(item) => {
+ setEditingRecurring(item);
+ setShowRecurringForm(true);
+ }}
+ onPause={(id, isActive) => mut.pauseRecurring.mutate({ id, isActive })}
+ onDelete={(id) => mut.deleteRecurring.mutate({ id })}
+ />
  </Card>
 
  <Card>

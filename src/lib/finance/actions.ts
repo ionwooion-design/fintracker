@@ -3,7 +3,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
 import { num, todayISO } from "@/lib/utils";
 import { ACHIEVEMENT_DEFS, DEFAULT_CATEGORIES, DEFAULT_ENVELOPES } from "./defaults";
-import { calcDailyLimit, calcCurrentBalance, nextStreak } from "./calc";
+import { calcDailyLimit, calcCurrentBalance, nextStreak, computeNextOccurrence } from "./calc";
 import { matchRule, parseSmsText } from "./sms";
 import type {
   Achievement,
@@ -12,6 +12,8 @@ import type {
   Envelope,
   FinanceSnapshot,
   FixedEvent,
+  RecurringFrequency,
+  RecurringTransaction,
   Transaction,
   UserSettings,
 } from "./types";
@@ -46,6 +48,30 @@ function mapSettings(row: Record<string, unknown>, userId: string): UserSettings
     privacyAccepted: Boolean(row.privacy_accepted),
     darkTheme: Boolean(row.dark_theme),
     currency: mapCurrency(row.currency),
+  };
+}
+
+
+function mapRecurring(row: Record<string, unknown>): RecurringTransaction {
+  return {
+    id: Number(row.id),
+    amount: num(row.amount as string | number),
+    type: row.type as "income" | "expense",
+    description: String(row.description ?? ""),
+    categoryId: row.category_id != null ? Number(row.category_id) : null,
+    envelopeId: row.envelope_id != null ? Number(row.envelope_id) : null,
+    frequency: row.frequency as RecurringFrequency,
+    interval: num(row.interval as string | number) || 1,
+    dayOfWeek: row.day_of_week != null ? Number(row.day_of_week) : null,
+    dayOfMonth: row.day_of_month != null ? Number(row.day_of_month) : null,
+    monthOfYear: row.month_of_year != null ? Number(row.month_of_year) : null,
+    customRrule: row.custom_rrule ? String(row.custom_rrule) : null,
+    startDate: String(row.start_date),
+    endDate: row.end_date ? String(row.end_date) : null,
+    nextOccurrence: String(row.next_occurrence),
+    lastGenerated: row.last_generated ? String(row.last_generated) : null,
+    isActive: Boolean(row.is_active),
+    autoCreate: Boolean(row.auto_create),
   };
 }
 
@@ -119,11 +145,16 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
     transaction_date: string;
     category_id: number | null;
     envelope_id: number | null;
+    recurring_id: number | null;
   }>`
-    select id, amount, type, description, transaction_date, category_id, envelope_id
+    select id, amount, type, description, transaction_date, category_id, envelope_id,
+           null::integer as recurring_id
     from transactions where user_id = ${userId}
     order by transaction_date desc, id desc
   `;
+  // After migration 0004, replace null::integer with recurring_id column:
+  // select id, amount, type, description, transaction_date, category_id, envelope_id, recurring_id
+
   const fixedEvents = await sql<{
     id: number;
     amount: string | number;
@@ -145,6 +176,30 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
     where user_id = ${userId} order by unlocked_at desc
   `;
 
+  let recurringRows: Record<string, unknown>[] = [];
+  try {
+    recurringRows = await sql<Record<string, unknown>>`
+      select * from recurring_transactions
+      where user_id = ${userId}
+      order by next_occurrence, id
+    `;
+  } catch {
+    // table may not exist until migration runs
+    recurringRows = [];
+  }
+
+  // Prefer selecting recurring_id if column exists
+  const txMapped = transactions.map((t) => ({
+    id: t.id,
+    amount: num(t.amount),
+    type: t.type as Transaction["type"],
+    description: t.description,
+    transactionDate: String(t.transaction_date),
+    categoryId: t.category_id,
+    envelopeId: t.envelope_id,
+    recurringId: (t as { recurring_id?: number | null }).recurring_id ?? null,
+  }));
+
   return {
     settings: mapSettings(settingsRow, userId),
     categories: categories as Category[],
@@ -155,15 +210,7 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
       color: e.color,
       icon: e.icon,
     })) as Envelope[],
-    transactions: transactions.map((t) => ({
-      id: t.id,
-      amount: num(t.amount),
-      type: t.type as Transaction["type"],
-      description: t.description,
-      transactionDate: String(t.transaction_date),
-      categoryId: t.category_id,
-      envelopeId: t.envelope_id,
-    })),
+    transactions: txMapped,
     fixedEvents: fixedEvents.map((e) => ({
       id: e.id,
       amount: num(e.amount),
@@ -178,6 +225,7 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
       icon: a.icon,
       unlockedAt: String(a.unlocked_at),
     })) as Achievement[],
+    recurring: recurringRows.map(mapRecurring),
   };
 }
 
@@ -241,10 +289,106 @@ async function refreshStreak(userId: string) {
   await unlockAchievements(userId, next.streak, snap.transactions.length);
 }
 
+
+async function generateDueRecurring(userId: string) {
+  const sql = await getSql();
+  const today = todayISO();
+  let rows: Record<string, unknown>[] = [];
+  try {
+    rows = await sql<Record<string, unknown>>`
+      select * from recurring_transactions
+      where user_id = ${userId}
+        and is_active = true
+        and auto_create = true
+        and next_occurrence <= ${today}
+    `;
+  } catch {
+    return;
+  }
+
+  for (const row of rows) {
+    const r = mapRecurring(row);
+    let cursor = r.nextOccurrence;
+    let lastGen = r.lastGenerated;
+    let guard = 0;
+    let deactivated = false;
+
+    while (cursor <= today && guard++ < 366) {
+      if (r.endDate && cursor > r.endDate) break;
+
+      try {
+        const existing = await sql`
+          select id from transactions
+          where user_id = ${userId}
+            and recurring_id = ${r.id}
+            and transaction_date = ${cursor}
+          limit 1
+        `;
+        if (!existing.length) {
+          await sql`
+            insert into transactions (
+              user_id, amount, type, description,
+              transaction_date, category_id, envelope_id, recurring_id
+            ) values (
+              ${userId}, ${r.amount}, ${r.type},
+              ${r.description || "Повторяющаяся операция"},
+              ${cursor}, ${r.categoryId}, ${r.envelopeId}, ${r.id}
+            )
+          `;
+        }
+      } catch {
+        // recurring_id column may not exist yet — insert without it
+        await sql`
+          insert into transactions (
+            user_id, amount, type, description,
+            transaction_date, category_id, envelope_id
+          ) values (
+            ${userId}, ${r.amount}, ${r.type},
+            ${r.description || "Повторяющаяся операция"},
+            ${cursor}, ${r.categoryId}, ${r.envelopeId}
+          )
+        `;
+      }
+
+      lastGen = cursor;
+      const next = computeNextOccurrence(cursor, r.frequency, r.interval, {
+        dayOfWeek: r.dayOfWeek,
+        dayOfMonth: r.dayOfMonth,
+        monthOfYear: r.monthOfYear,
+        endDate: r.endDate,
+      });
+      if (!next) {
+        await sql`
+          update recurring_transactions
+          set is_active = false,
+              last_generated = ${lastGen},
+              next_occurrence = ${cursor},
+              updated_at = now()
+          where id = ${r.id} and user_id = ${userId}
+        `;
+        deactivated = true;
+        break;
+      }
+      cursor = next;
+    }
+
+    if (!deactivated && (lastGen !== r.lastGenerated || cursor !== r.nextOccurrence)) {
+      await sql`
+        update recurring_transactions
+        set last_generated = ${lastGen},
+            next_occurrence = ${cursor},
+            updated_at = now()
+        where id = ${r.id} and user_id = ${userId}
+      `;
+    }
+  }
+}
+
 export const getFinanceData = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     await ensureSeeded(context.userId);
+    await generateDueRecurring(context.userId);
     return loadSnapshot(context.userId);
   });
 
@@ -551,3 +695,143 @@ export const askAdvisor = createServerFn({ method: "POST" })
     const text = body.choices?.[0]?.message?.content ?? "";
     return { ok: true as const, text };
   });
+
+export const saveRecurring = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(
+    (d: {
+      id?: number;
+      amount: number;
+      type: "income" | "expense";
+      description: string;
+      categoryId: number | null;
+      envelopeId: number | null;
+      frequency: RecurringFrequency;
+      interval?: number;
+      dayOfWeek?: number | null;
+      dayOfMonth?: number | null;
+      monthOfYear?: number | null;
+      startDate: string;
+      endDate?: string | null;
+      autoCreate?: boolean;
+      isActive?: boolean;
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    if (data.amount <= 0) throw new Error("Сумма должна быть больше нуля");
+    const interval = Math.max(1, data.interval ?? 1);
+    const sql = await getSql();
+    const today = todayISO();
+
+    let next = data.startDate;
+    if (next < today) {
+      const n = computeNextOccurrence(data.startDate, data.frequency, interval, {
+        dayOfWeek: data.dayOfWeek,
+        dayOfMonth: data.dayOfMonth,
+        monthOfYear: data.monthOfYear,
+        endDate: data.endDate,
+      });
+      next = n ?? data.startDate;
+    }
+
+    if (data.id) {
+      await sql`
+        update recurring_transactions set
+          amount = ${data.amount},
+          type = ${data.type},
+          description = ${data.description.trim()},
+          category_id = ${data.categoryId},
+          envelope_id = ${data.envelopeId},
+          frequency = ${data.frequency},
+          interval = ${interval},
+          day_of_week = ${data.dayOfWeek ?? null},
+          day_of_month = ${data.dayOfMonth ?? null},
+          month_of_year = ${data.monthOfYear ?? null},
+          start_date = ${data.startDate},
+          end_date = ${data.endDate ?? null},
+          next_occurrence = ${next},
+          auto_create = ${data.autoCreate ?? true},
+          is_active = ${data.isActive ?? true},
+          updated_at = now()
+        where id = ${data.id} and user_id = ${context.userId}
+      `;
+    } else {
+      await sql`
+        insert into recurring_transactions (
+          user_id, amount, type, description,
+          category_id, envelope_id,
+          frequency, interval,
+          day_of_week, day_of_month, month_of_year,
+          start_date, end_date, next_occurrence,
+          auto_create, is_active
+        ) values (
+          ${context.userId},
+          ${data.amount},
+          ${data.type},
+          ${data.description.trim()},
+          ${data.categoryId},
+          ${data.envelopeId},
+          ${data.frequency},
+          ${interval},
+          ${data.dayOfWeek ?? null},
+          ${data.dayOfMonth ?? null},
+          ${data.monthOfYear ?? null},
+          ${data.startDate},
+          ${data.endDate ?? null},
+          ${next},
+          ${data.autoCreate ?? true},
+          ${data.isActive ?? true}
+        )
+      `;
+    }
+
+    await generateDueRecurring(context.userId);
+    await refreshStreak(context.userId);
+    return loadSnapshot(context.userId);
+  });
+
+export const pauseRecurring = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((d: { id: number; isActive: boolean }) => d)
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await sql`
+      update recurring_transactions
+      set is_active = ${data.isActive}, updated_at = now()
+      where id = ${data.id} and user_id = ${context.userId}
+    `;
+    return loadSnapshot(context.userId);
+  });
+
+export const deleteRecurring = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((d: { id: number; deleteGenerated?: boolean }) => d)
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    if (data.deleteGenerated) {
+      try {
+        await sql`
+          delete from transactions
+          where recurring_id = ${data.id} and user_id = ${context.userId}
+        `;
+      } catch {
+        // column may not exist
+      }
+    } else {
+      try {
+        await sql`
+          update transactions set recurring_id = null
+          where recurring_id = ${data.id} and user_id = ${context.userId}
+        `;
+      } catch {
+        // ignore
+      }
+    }
+    await sql`
+      delete from recurring_transactions
+      where id = ${data.id} and user_id = ${context.userId}
+    `;
+    await refreshStreak(context.userId);
+    return loadSnapshot(context.userId);
+  });
+

@@ -5,13 +5,16 @@ import {
   bulkDeleteTransactions,
   deleteEnvelope,
   deleteFixedEvent,
+  deleteRecurring,
   deleteTransaction,
   getFinanceData,
   importSms,
+  pauseRecurring,
   resetFinanceData,
   saveCategory,
   saveEnvelope,
   saveFixedEvent,
+  saveRecurring,
   saveSettings,
   updateTransaction,
 } from "./actions";
@@ -86,5 +89,17 @@ export function useFinanceMutations() {
       onSuccess: (res) => qc.setQueryData(KEY, res.snap),
     }),
     askAi: useMutation({ mutationFn: () => askAdvisor() }),
+    saveRecurring: useMutation({
+      mutationFn: wrap(saveRecurring),
+      onSuccess: setSnap,
+    }),
+    pauseRecurring: useMutation({
+      mutationFn: wrap(pauseRecurring),
+      onSuccess: setSnap,
+    }),
+    deleteRecurring: useMutation({
+      mutationFn: wrap(deleteRecurring),
+      onSuccess: setSnap,
+    }),
   };
 }

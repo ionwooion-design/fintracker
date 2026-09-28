@@ -40,7 +40,6 @@ export const CURRENCIES: {
   { code: "CNY", symbol: "¥", name: "Китайский юань" },
 ];
 
-
 export type Category = {
   id: number;
   name: string;
@@ -64,6 +63,7 @@ export type Transaction = {
   transactionDate: string;
   categoryId: number | null;
   envelopeId: number | null;
+  recurringId?: number | null;
 };
 
 export type FixedEvent = {
@@ -80,6 +80,34 @@ export type Achievement = {
   description: string;
   icon: string;
   unlockedAt: string;
+};
+
+export type RecurringFrequency =
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly"
+  | "custom";
+
+export type RecurringTransaction = {
+  id: number;
+  amount: number;
+  type: TxType;
+  description: string;
+  categoryId: number | null;
+  envelopeId: number | null;
+  frequency: RecurringFrequency;
+  interval: number;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  monthOfYear: number | null;
+  customRrule: string | null;
+  startDate: string;
+  endDate: string | null;
+  nextOccurrence: string;
+  lastGenerated: string | null;
+  isActive: boolean;
+  autoCreate: boolean;
 };
 
 export type EnvelopeWithSpent = Envelope & {
@@ -112,6 +140,7 @@ export type FinanceSnapshot = {
   transactions: Transaction[];
   fixedEvents: FixedEvent[];
   achievements: Achievement[];
+  recurring: RecurringTransaction[];
 };
 
 export type DashboardComputed = {
