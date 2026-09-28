@@ -1,5 +1,13 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BarChart3, Home, Moon, Settings, Sun, Wallet } from "lucide-react";
+import {
+  BarChart3,
+  Home,
+  Moon,
+  Settings,
+  Sun,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useFinance, useFinanceMutations } from "@/lib/finance/use-finance";
@@ -8,9 +16,10 @@ import { AchievementUnlockWatcher } from "@/components/finance/achievement-unloc
 
 const TABS = [
   { to: "/", label: "Главная", icon: Home },
-  { to: "/stats", label: "Статистика", icon: BarChart3 },
+  { to: "/markets", label: "Рынок", icon: TrendingUp },
+  { to: "/stats", label: "Стат.", icon: BarChart3 },
   { to: "/envelopes", label: "Конверты", icon: Wallet },
-  { to: "/settings", label: "Настройки", icon: Settings },
+  { to: "/settings", label: "Ещё", icon: Settings },
 ] as const;
 
 export function AppShell({ children, title }: { children: React.ReactNode; title: string }) {
@@ -62,9 +71,9 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
       </header>
       <main className="flex-1 px-4 pb-28 pt-4">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-lg border-t border-border glass-strong px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
-        <ul className="grid grid-cols-4">
+        <ul className="grid grid-cols-5">
           {TABS.map((tab) => {
-            const active = pathname === tab.to;
+            const active = pathname === tab.to || (tab.to !== "/" && pathname.startsWith(tab.to));
             const Icon = tab.icon;
             return (
               <li key={tab.to}>

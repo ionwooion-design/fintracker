@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EnvelopesRouteImport } from './routes/envelopes'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MarketsRouteImport } from './routes/markets'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -29,6 +30,11 @@ const EnvelopesRoute = EnvelopesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketsRoute = MarketsRouteImport.update({
+  id: '/markets',
+  path: '/markets',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/envelopes': typeof EnvelopesRoute
   '/login': typeof LoginRoute
+  '/markets': typeof MarketsRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/envelopes': typeof EnvelopesRoute
   '/login': typeof LoginRoute
+  '/markets': typeof MarketsRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/envelopes': typeof EnvelopesRoute
   '/login': typeof LoginRoute
+  '/markets': typeof MarketsRoute
   '/settings': typeof SettingsRoute
   '/stats': typeof StatsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -75,14 +84,28 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/envelopes' | '/login' | '/settings' | '/stats' | '/api/auth/$'
+    | '/'
+    | '/envelopes'
+    | '/login'
+    | '/markets'
+    | '/settings'
+    | '/stats'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/envelopes' | '/login' | '/settings' | '/stats' | '/api/auth/$'
+  to:
+    | '/'
+    | '/envelopes'
+    | '/login'
+    | '/markets'
+    | '/settings'
+    | '/stats'
+    | '/api/auth/$'
   id:
     | '__root__'
     | '/'
     | '/envelopes'
     | '/login'
+    | '/markets'
     | '/settings'
     | '/stats'
     | '/api/auth/$'
@@ -92,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EnvelopesRoute: typeof EnvelopesRoute
   LoginRoute: typeof LoginRoute
+  MarketsRoute: typeof MarketsRoute
   SettingsRoute: typeof SettingsRoute
   StatsRoute: typeof StatsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -118,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/markets': {
+      id: '/markets'
+      path: '/markets'
+      fullPath: '/markets'
+      preLoaderRoute: typeof MarketsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -148,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EnvelopesRoute: EnvelopesRoute,
   LoginRoute: LoginRoute,
+  MarketsRoute: MarketsRoute,
   SettingsRoute: SettingsRoute,
   StatsRoute: StatsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
