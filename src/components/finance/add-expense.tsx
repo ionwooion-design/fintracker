@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { CategoryIcon } from "@/lib/finance/icons";
@@ -27,9 +27,16 @@ export function AddExpenseForm({
   const [amount, setAmount] = useState("");
   const [comment, setComment] = useState("");
   const [date, setDate] = useState(todayISO());
-  const [categoryId, setCategoryId] = useState<number | null>(categories[0]?.id ?? null);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
   const [envelopeId, setEnvelopeId] = useState<number | null>(null);
   const [kind, setKind] = useState<"expense" | "income">("expense");
+
+  const visibleCats = categories.filter((c) => (c.kind ?? "expense") === kind);
+
+  useEffect(() => {
+    setCategoryId(visibleCats[0]?.id ?? null);
+    setEnvelopeId(null);
+  }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <form
@@ -43,7 +50,7 @@ export function AddExpenseForm({
           type: kind,
           description: comment.trim() || "Без названия",
           transactionDate: date,
-          categoryId: kind === "expense" ? categoryId : null,
+          categoryId,
           envelopeId: kind === "expense" ? envelopeId : null,
         });
         setAmount("");
@@ -73,49 +80,50 @@ export function AddExpenseForm({
         </button>
       </div>
 
+      {visibleCats.length > 0 && (
+        <div className="-mx-1 flex gap-2 overflow-x-auto pb-1">
+          {visibleCats.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                setCategoryId(c.id);
+                setEnvelopeId(null);
+              }}
+              className={cn(
+                "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
+                categoryId === c.id && (kind === "income" || envelopeId == null)
+                  ? "border-accent bg-accent text-accent-fg"
+                  : "border-border bg-elevated text-fg",
+              )}
+            >
+              <CategoryIcon name={c.icon} className="size-3.5" />
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {kind === "expense" && (
-        <>
-          <div className="-mx-1 flex gap-2 overflow-x-auto pb-1">
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
-                  setCategoryId(c.id);
-                  setEnvelopeId(null);
-                }}
-                className={cn(
-                  "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium",
-                  categoryId === c.id && envelopeId == null
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-elevated text-fg",
-                )}
-              >
-                <CategoryIcon name={c.icon} className="size-3.5" />
-                {c.name}
-              </button>
-            ))}
-          </div>
-          <div className="-mx-1 flex gap-2 overflow-x-auto pb-1">
-            {envelopes.map((env) => (
-              <button
-                key={env.id}
-                type="button"
-                onClick={() => {
-                  setEnvelopeId(env.id);
-                  setCategoryId(null);
-                }}
-                className={cn(
-                  "flex size-11 shrink-0 items-center justify-center rounded-full border",
-                  envelopeId === env.id ? "border-accent bg-accent text-accent-fg" : "border-border bg-elevated",
-                )}
-                title={env.name}
-              >
-                <CategoryIcon name={env.icon} className="size-4" />
-              </button>
-            ))}
-          </div>
-        </>
+        <div className="-mx-1 flex gap-2 overflow-x-auto pb-1">
+          {envelopes.map((env) => (
+            <button
+              key={env.id}
+              type="button"
+              onClick={() => {
+                setEnvelopeId(env.id);
+                setCategoryId(null);
+              }}
+              className={cn(
+                "flex size-11 shrink-0 items-center justify-center rounded-full border",
+                envelopeId === env.id ? "border-accent bg-accent text-accent-fg" : "border-border bg-elevated",
+              )}
+              title={env.name}
+            >
+              <CategoryIcon name={env.icon} className="size-4" />
+            </button>
+          ))}
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-2">

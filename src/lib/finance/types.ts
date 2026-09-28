@@ -40,11 +40,15 @@ export const CURRENCIES: {
   { code: "CNY", symbol: "¥", name: "Китайский юань" },
 ];
 
+export type CategoryKind = "expense" | "income";
+
 export type Category = {
   id: number;
   name: string;
   color: string;
   icon: string;
+  /** expense (default) or income */
+  kind: CategoryKind;
 };
 
 export type Envelope = {

@@ -122,7 +122,7 @@ export function RecurringForm({
           amount: n,
           type: form.type,
           description: form.description.trim(),
-          categoryId: form.type === "expense" ? form.categoryId : null,
+          categoryId: form.categoryId,
           envelopeId: form.type === "expense" ? form.envelopeId : null,
           frequency: form.frequency,
           interval: Math.max(1, Number(form.interval) || 1),
@@ -290,12 +290,14 @@ export function RecurringForm({
         </div>
       )}
 
-      {form.type === "expense" && (
+      {(form.type === "expense" || form.type === "income") && (
         <>
           <div>
             <Label>Категория</Label>
             <div className="-mx-1 mt-1 flex gap-2 overflow-x-auto pb-1">
-              {categories.map((c) => (
+              {categories
+                .filter((c) => (c.kind ?? "expense") === form.type)
+                .map((c) => (
                 <button
                   key={c.id}
                   type="button"
@@ -313,36 +315,38 @@ export function RecurringForm({
               ))}
             </div>
           </div>
-          <div>
-            <Label>Конверт</Label>
-            <div className="-mx-1 mt-1 flex gap-2 overflow-x-auto pb-1">
-              <button
-                type="button"
-                onClick={() => set("envelopeId", null)}
-                className={cn(
-                  "h-9 shrink-0 rounded-[10px] px-3 text-xs",
-                  form.envelopeId == null ? "bg-accent text-accent-fg" : "bg-elevated text-muted",
-                )}
-              >
-                Нет
-              </button>
-              {envelopes.map((env) => (
+          {form.type === "expense" && (
+            <div>
+              <Label>Конверт</Label>
+              <div className="-mx-1 mt-1 flex gap-2 overflow-x-auto pb-1">
                 <button
-                  key={env.id}
                   type="button"
-                  onClick={() => set("envelopeId", env.id)}
+                  onClick={() => set("envelopeId", null)}
                   className={cn(
                     "h-9 shrink-0 rounded-[10px] px-3 text-xs",
-                    form.envelopeId === env.id
-                      ? "bg-accent text-accent-fg"
-                      : "bg-elevated text-muted",
+                    form.envelopeId == null ? "bg-accent text-accent-fg" : "bg-elevated text-muted",
                   )}
                 >
-                  {env.name}
+                  Нет
                 </button>
-              ))}
+                {envelopes.map((env) => (
+                  <button
+                    key={env.id}
+                    type="button"
+                    onClick={() => set("envelopeId", env.id)}
+                    className={cn(
+                      "h-9 shrink-0 rounded-[10px] px-3 text-xs",
+                      form.envelopeId === env.id
+                        ? "bg-accent text-accent-fg"
+                        : "bg-elevated text-muted",
+                    )}
+                  >
+                    {env.name}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 

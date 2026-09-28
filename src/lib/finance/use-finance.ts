@@ -3,6 +3,7 @@ import {
   addTransaction,
   askAdvisor,
   bulkDeleteTransactions,
+  deleteCategory,
   deleteEnvelope,
   deleteFixedEvent,
   deleteRecurring,
@@ -66,6 +67,10 @@ export function useFinanceMutations() {
     }),
     saveCat: useMutation({
       mutationFn: wrap(saveCategory),
+      onSuccess: setSnap,
+    }),
+    deleteCat: useMutation({
+      mutationFn: wrap(deleteCategory),
       onSuccess: setSnap,
     }),
     saveEvent: useMutation({

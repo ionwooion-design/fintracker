@@ -2,12 +2,18 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
 import { num, todayISO } from "@/lib/utils";
-import { ACHIEVEMENT_DEFS, DEFAULT_CATEGORIES, DEFAULT_ENVELOPES } from "./defaults";
+import {
+  ACHIEVEMENT_DEFS,
+  DEFAULT_CATEGORIES,
+  DEFAULT_ENVELOPES,
+  DEFAULT_INCOME_CATEGORIES,
+} from "./defaults";
 import { calcDailyLimit, calcCurrentBalance, nextStreak, computeNextOccurrence } from "./calc";
 import { matchRule, parseSmsText } from "./sms";
 import type {
   Achievement,
   Category,
+  CategoryKind,
   CurrencyCode,
   Envelope,
   FinanceSnapshot,
@@ -90,12 +96,21 @@ async function ensureSeeded(userId: string, displayName?: string | null) {
     values (${userId}, ${displayName ?? ""}, ${today}, 50000, ${endDate}, 10000)
   `;
 
-  for (const c of DEFAULT_CATEGORIES) {
-    await sql`
-      insert into categories (user_id, name, color, icon)
-      values (${userId}, ${c.name}, ${c.color}, ${c.icon})
-      on conflict (user_id, name) do nothing
-    `;
+  for (const c of [...DEFAULT_CATEGORIES, ...DEFAULT_INCOME_CATEGORIES]) {
+    try {
+      await sql`
+        insert into categories (user_id, name, color, icon, kind)
+        values (${userId}, ${c.name}, ${c.color}, ${c.icon}, ${c.kind})
+        on conflict do nothing
+      `;
+    } catch {
+      // fallback if kind column not yet migrated
+      await sql`
+        insert into categories (user_id, name, color, icon)
+        values (${userId}, ${c.name}, ${c.color}, ${c.icon})
+        on conflict do nothing
+      `;
+    }
   }
   for (const e of DEFAULT_ENVELOPES) {
     await sql`
@@ -125,9 +140,16 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
   const [settingsRow] = await sql<Record<string, unknown>>`
     select * from user_settings where user_id = ${userId}
   `;
-  const categories = await sql<{ id: number; name: string; color: string; icon: string }>`
-    select id, name, color, icon from categories where user_id = ${userId} order by name
-  `;
+  let categories: { id: number; name: string; color: string; icon: string; kind?: string }[] = [];
+  try {
+    categories = await sql<{ id: number; name: string; color: string; icon: string; kind: string }>`
+      select id, name, color, icon, kind from categories where user_id = ${userId} order by kind, name
+    `;
+  } catch {
+    categories = await sql<{ id: number; name: string; color: string; icon: string }>`
+      select id, name, color, icon from categories where user_id = ${userId} order by name
+    `;
+  }
   const envelopes = await sql<{
     id: number;
     name: string;
@@ -202,7 +224,13 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
 
   return {
     settings: mapSettings(settingsRow, userId),
-    categories: categories as Category[],
+    categories: categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      color: c.color,
+      icon: c.icon,
+      kind: (c.kind === "income" ? "income" : "expense") as CategoryKind,
+    })) as Category[],
     envelopes: envelopes.map((e) => ({
       id: e.id,
       name: e.name,
@@ -540,20 +568,53 @@ export const deleteEnvelope = createServerFn({ method: "POST" })
 
 export const saveCategory = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((d: { id?: number; name: string; color: string; icon: string }) => d)
+  .validator((d: { id?: number; name: string; color: string; icon: string; kind?: CategoryKind }) => d)
   .handler(async ({ context, data }) => {
     const sql = await getSql();
+    const kind: CategoryKind = data.kind === "income" ? "income" : "expense";
     if (data.id) {
-      await sql`
-        update categories set name = ${data.name.trim()}, color = ${data.color}, icon = ${data.icon}
-        where id = ${data.id} and user_id = ${context.userId}
-      `;
+      try {
+        await sql`
+          update categories
+          set name = ${data.name.trim()}, color = ${data.color}, icon = ${data.icon}, kind = ${kind}
+          where id = ${data.id} and user_id = ${context.userId}
+        `;
+      } catch {
+        await sql`
+          update categories
+          set name = ${data.name.trim()}, color = ${data.color}, icon = ${data.icon}
+          where id = ${data.id} and user_id = ${context.userId}
+        `;
+      }
     } else {
-      await sql`
-        insert into categories (user_id, name, color, icon)
-        values (${context.userId}, ${data.name.trim()}, ${data.color}, ${data.icon})
-      `;
+      try {
+        await sql`
+          insert into categories (user_id, name, color, icon, kind)
+          values (${context.userId}, ${data.name.trim()}, ${data.color}, ${data.icon}, ${kind})
+        `;
+      } catch {
+        await sql`
+          insert into categories (user_id, name, color, icon)
+          values (${context.userId}, ${data.name.trim()}, ${data.color}, ${data.icon})
+        `;
+      }
     }
+    return loadSnapshot(context.userId);
+  });
+
+export const deleteCategory = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((d: { id: number }) => d)
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await sql`update transactions set category_id = null where category_id = ${data.id} and user_id = ${context.userId}`;
+    try {
+      await sql`update recurring_transactions set category_id = null where category_id = ${data.id} and user_id = ${context.userId}`;
+    } catch {
+      // table may not exist
+    }
+    await sql`update categorization_rules set category_id = null where category_id = ${data.id} and user_id = ${context.userId}`;
+    await sql`delete from categories where id = ${data.id} and user_id = ${context.userId}`;
     return loadSnapshot(context.userId);
   });
 
