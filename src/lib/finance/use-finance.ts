@@ -3,9 +3,11 @@ import {
   addTransaction,
   askAdvisor,
   bulkDeleteTransactions,
+  contributeToGoal,
   deleteCategory,
   deleteEnvelope,
   deleteFixedEvent,
+  deleteGoal,
   deleteRecurring,
   deleteTransaction,
   getFinanceData,
@@ -15,8 +17,10 @@ import {
   saveCategory,
   saveEnvelope,
   saveFixedEvent,
+  saveGoal,
   saveRecurring,
   saveSettings,
+  startNewPeriod,
   updateTransaction,
 } from "./actions";
 import { computeDashboard } from "./calc";
@@ -104,6 +108,22 @@ export function useFinanceMutations() {
     }),
     deleteRecurring: useMutation({
       mutationFn: wrap(deleteRecurring),
+      onSuccess: setSnap,
+    }),
+    saveGoal: useMutation({
+      mutationFn: wrap(saveGoal),
+      onSuccess: setSnap,
+    }),
+    deleteGoal: useMutation({
+      mutationFn: wrap(deleteGoal),
+      onSuccess: setSnap,
+    }),
+    contributeToGoal: useMutation({
+      mutationFn: wrap(contributeToGoal),
+      onSuccess: setSnap,
+    }),
+    startNewPeriod: useMutation({
+      mutationFn: wrap(startNewPeriod),
       onSuccess: setSnap,
     }),
   };

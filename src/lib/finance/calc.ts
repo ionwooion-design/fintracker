@@ -11,6 +11,7 @@ import type {
   ProjectionPoint,
   RecurringFrequency,
   RecurringTransaction,
+  SavingsGoalWithProgress,
   Transaction,
 } from "./types";
 
@@ -25,13 +26,19 @@ export function computeDashboard(
     envelopes,
     categories,
     recurring = [],
+    goals = [],
   } = snap;
 
+  const periodStart = settings.startDate;
+
+  // Balance uses period-scoped txs so carrying balance into a new period
+  // (initialBalance = old currentBalance) does not double-count history.
   const currentBalance = calcCurrentBalance(
     settings.initialBalance,
     transactions,
     fixedEvents,
     today,
+    periodStart,
   );
   const spentToday = transactions
     .filter((t) => t.transactionDate === today && t.type === "expense")
@@ -62,9 +69,15 @@ export function computeDashboard(
   const progressTone =
     progressPercent < 50 ? "green" : progressPercent < 85 ? "yellow" : "red";
 
+  // Envelope spent is scoped to the current budget period
   const envelopeRows: EnvelopeWithSpent[] = envelopes.map((env) => {
     const spent = transactions
-      .filter((t) => t.type === "expense" && t.envelopeId === env.id)
+      .filter(
+        (t) =>
+          t.type === "expense" &&
+          t.envelopeId === env.id &&
+          t.transactionDate >= periodStart,
+      )
       .reduce((s, t) => s + t.amount, 0);
     const remaining = env.budget - spent;
     const usagePercent =
@@ -83,6 +96,19 @@ export function computeDashboard(
     0,
   );
   const freeMoney = currentBalance - allocatedRemaining;
+
+  const goalRows: SavingsGoalWithProgress[] = goals.map((g) => {
+    const remaining = Math.max(0, g.targetAmount - g.currentAmount);
+    const progressPercent =
+      g.targetAmount <= 0
+        ? 0
+        : Math.min(100, (g.currentAmount / g.targetAmount) * 100);
+    return { ...g, remaining, progressPercent };
+  });
+  const activeGoals = goalRows.filter((g) => !g.isCompleted);
+  const goalsTotalSaved = activeGoals.reduce((s, g) => s + g.currentAmount, 0);
+  const goalsTotalTarget = activeGoals.reduce((s, g) => s + g.targetAmount, 0);
+  const freeAfterGoals = currentBalance - goalsTotalSaved;
 
   const byDayMap = new Map<string, Transaction[]>();
   for (const t of [...transactions].sort((a, b) =>
@@ -112,6 +138,7 @@ export function computeDashboard(
     currentStreak: settings.currentStreak,
     envelopes: envelopeRows,
     freeMoney,
+    freeAfterGoals,
     aiTip: localTip(progressPercent, remainingToday, settings.currency),
     transactionsByDay,
     heatmap: buildHeatmap(transactions, today),
@@ -130,22 +157,37 @@ export function computeDashboard(
       recurring,
       spentToday,
     ),
+    goals: goalRows,
+    goalsTotalSaved,
+    goalsTotalTarget,
   };
 }
 
+/**
+ * Current balance for the budget period.
+ * When `periodStart` is set, only transactions/fixed events on or after that
+ * date are applied on top of `initial` (the balance at period start).
+ * This makes «перенос остатка» safe without deleting history.
+ */
 export function calcCurrentBalance(
   initial: number,
   transactions: Transaction[],
   fixedEvents: FixedEvent[],
   today: string,
+  periodStart?: string,
 ): number {
+  const inPeriod = (date: string) =>
+    !periodStart || date >= periodStart;
+
   const incomeTx = transactions
-    .filter((t) => t.type === "income")
+    .filter((t) => t.type === "income" && inPeriod(t.transactionDate))
     .reduce((s, t) => s + t.amount, 0);
   const expenseTx = transactions
-    .filter((t) => t.type === "expense")
+    .filter((t) => t.type === "expense" && inPeriod(t.transactionDate))
     .reduce((s, t) => s + t.amount, 0);
-  const pastFixed = fixedEvents.filter((e) => e.eventDate <= today);
+  const pastFixed = fixedEvents.filter(
+    (e) => e.eventDate <= today && inPeriod(e.eventDate),
+  );
   const fixedIncome = pastFixed
     .filter((e) => e.amount > 0)
     .reduce((s, e) => s + e.amount, 0);

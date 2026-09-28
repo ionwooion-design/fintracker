@@ -10,6 +10,7 @@ import {
 } from "@/components/finance/budget-alerts";
 import { EnvelopeCircle } from "@/components/finance/envelope-circle";
 import { ExpenseHeatmap } from "@/components/finance/heatmap";
+import { GoalsPanel } from "@/components/finance/goals-panel";
 import { EditTxDialog, TransactionList } from "@/components/finance/tx-list";
 import { ThemeSync } from "@/components/theme-sync";
 import { Button } from "@/components/ui/button";
@@ -114,6 +115,8 @@ function Dashboard() {
  </div>
  <p className="mt-3 text-xs text-muted">Свободные: {formatMoney(computed.freeMoney, currency)}</p>
  </Card>
+
+ <GoalsPanel snapshot={snapshot} computed={computed} mode="compact" />
 
  <Card>
  <h2 className="mb-3 font-display text-lg">Быстрый расход</h2>

@@ -147,6 +147,26 @@ export type HeatmapDay = {
   amount: number;
 };
 
+/** Personal savings goal (independent of budget-period finalTarget). */
+export type SavingsGoal = {
+  id: number;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline: string | null;
+  color: string;
+  icon: string;
+  isCompleted: boolean;
+  completedAt: string | null;
+  note: string;
+  createdAt: string;
+};
+
+export type SavingsGoalWithProgress = SavingsGoal & {
+  remaining: number;
+  progressPercent: number;
+};
+
 export type FinanceSnapshot = {
   settings: UserSettings;
   categories: Category[];
@@ -155,6 +175,8 @@ export type FinanceSnapshot = {
   fixedEvents: FixedEvent[];
   achievements: Achievement[];
   recurring: RecurringTransaction[];
+  /** Savings goals — empty array if migration not applied yet */
+  goals: SavingsGoal[];
 };
 
 export type DashboardComputed = {
@@ -168,9 +190,14 @@ export type DashboardComputed = {
   currentStreak: number;
   envelopes: EnvelopeWithSpent[];
   freeMoney: number;
+  /** Balance not allocated to active savings goals */
+  freeAfterGoals: number;
   aiTip: string;
   transactionsByDay: { date: string; items: Transaction[] }[];
   heatmap: HeatmapDay[];
   categoryBreakdown: CategoryExpense[];
   projection: ProjectionPoint[];
+  goals: SavingsGoalWithProgress[];
+  goalsTotalSaved: number;
+  goalsTotalTarget: number;
 };

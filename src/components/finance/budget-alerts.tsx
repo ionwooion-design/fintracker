@@ -150,41 +150,61 @@ function PeriodBanner({
     return todayISO(d);
   });
   const [newInitial, setNewInitial] = useState(
-    String(Math.round(computed.currentBalance)),
+    String(Math.round(computed.currentBalance * 100) / 100),
   );
   const [newTarget, setNewTarget] = useState(
     String(snapshot.settings.finalTarget),
   );
-  const submitting = mut.saveSettings.isPending;
+  const [carryBalance, setCarryBalance] = useState(true);
+  const [keepHistory, setKeepHistory] = useState(true);
+  const submitting = mut.startNewPeriod.isPending;
 
   const startNewPeriod = () => {
     const initial = Number(String(newInitial).replace(",", "."));
     const target = Number(String(newTarget).replace(",", "."));
-    if (!Number.isFinite(initial) || !Number.isFinite(target)) return;
+    if (!carryBalance && !Number.isFinite(initial)) {
+      toast.error("Укажите стартовый баланс");
+      return;
+    }
+    if (!Number.isFinite(target)) {
+      toast.error("Укажите целевой баланс");
+      return;
+    }
     if (newEnd < newStart) {
       toast.error("Дата окончания не может быть раньше начала");
       return;
     }
-    mut.saveSettings.mutate(
+    if (
+      !keepHistory &&
+      !confirm(
+        "Старые операции до даты начала нового периода будут удалены. Продолжить?",
+      )
+    ) {
+      return;
+    }
+    mut.startNewPeriod.mutate(
       {
-        userName: snapshot.settings.userName,
         startDate: newStart,
         endDate: newEnd,
-        initialBalance: initial,
         finalTarget: target,
-        darkTheme: snapshot.settings.darkTheme,
-        privacyAccepted: true,
-        currency: snapshot.settings.currency,
+        initialBalance: carryBalance ? undefined : initial,
+        carryBalance,
+        keepHistory,
       },
       {
         onSuccess: () => {
+          const bal = carryBalance
+            ? computed.currentBalance
+            : initial;
           toast.success("Новый бюджетный период начат", {
-            description: `С ${newStart} по ${newEnd}. Начальный баланс: ${formatMoney(initial, currency)}.`,
+            description: `С ${newStart} по ${newEnd}. Стартовый баланс: ${formatMoney(bal, currency)}${
+              carryBalance ? " (перенос остатка)" : ""
+            }.`,
           });
           setOpen(false);
         },
         onError: () => {
-          toast.error("Не удалось сохранить период");
+          toast.error("Не удалось начать новый период");
         },
       },
     );
@@ -264,6 +284,7 @@ function PeriodBanner({
                     inputMode="decimal"
                     value={newInitial}
                     onChange={(e) => setNewInitial(e.target.value)}
+                    disabled={carryBalance}
                   />
                 </div>
                 <div>
@@ -275,9 +296,37 @@ function PeriodBanner({
                   />
                 </div>
               </div>
+              <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-[var(--accent)]"
+                  checked={carryBalance}
+                  onChange={(e) => {
+                    setCarryBalance(e.target.checked);
+                    if (e.target.checked) {
+                      setNewInitial(
+                        String(Math.round(computed.currentBalance * 100) / 100),
+                      );
+                    }
+                  }}
+                />
+                <span>
+                  Перенести остаток ({formatMoney(computed.currentBalance, currency)})
+                </span>
+              </label>
+              <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-[var(--accent)]"
+                  checked={keepHistory}
+                  onChange={(e) => setKeepHistory(e.target.checked)}
+                />
+                <span>Сохранить историю операций</span>
+              </label>
               <p className="text-xs text-muted">
-                По умолчанию баланс берётся из текущего ({formatMoney(computed.currentBalance, currency)}).
-                Транзакции прошлого периода сохраняются.
+                Баланс считается от даты начала периода — перенос остатка безопасен
+                даже с историей. Расход по конвертам сбрасывается автоматически
+                (считается только в текущем периоде).
               </p>
               <div className="flex gap-2">
                 <Button

@@ -26,6 +26,7 @@ import type {
   FixedEvent,
   RecurringFrequency,
   RecurringTransaction,
+  SavingsGoal,
   Transaction,
   UserSettings,
 } from "./types";
@@ -230,6 +231,20 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
     recurringRows = [];
   }
 
+  let goals: SavingsGoal[] = [];
+  try {
+    const goalRows = await sql<Record<string, unknown>>`
+      select id, name, target_amount, current_amount, deadline, color, icon,
+             is_completed, completed_at, note, created_at
+      from savings_goals
+      where user_id = ${userId}
+      order by is_completed asc, created_at desc
+    `;
+    goals = goalRows.map(mapGoal);
+  } catch {
+    goals = [];
+  }
+
   // Prefer selecting recurring_id if column exists
   const txMapped = transactions.map((t) => ({
     id: t.id,
@@ -276,6 +291,23 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
       xpReward: a.xp_reward != null ? num(a.xp_reward as string | number) : 0,
     })) as Achievement[],
     recurring: recurringRows.map(mapRecurring),
+    goals,
+  };
+}
+
+function mapGoal(row: Record<string, unknown>): SavingsGoal {
+  return {
+    id: Number(row.id),
+    name: String(row.name ?? ""),
+    targetAmount: num(row.target_amount as string | number),
+    currentAmount: num(row.current_amount as string | number),
+    deadline: row.deadline ? String(row.deadline) : null,
+    color: String(row.color ?? "#3F6B5C"),
+    icon: String(row.icon ?? "target"),
+    isCompleted: Boolean(row.is_completed),
+    completedAt: row.completed_at ? String(row.completed_at) : null,
+    note: String(row.note ?? ""),
+    createdAt: String(row.created_at ?? ""),
   };
 }
 
@@ -424,6 +456,7 @@ async function buildUnlockContext(userId: string, snap: FinanceSnapshot, extra?:
     snap.transactions,
     snap.fixedEvents,
     today,
+    snap.settings.startDate,
   );
   const daysRemaining = Math.max(
     0,
@@ -512,6 +545,7 @@ async function refreshStreak(userId: string) {
     snap.transactions,
     snap.fixedEvents,
     today,
+    snap.settings.startDate,
   );
   const daysRemaining = Math.max(
     0,
@@ -1183,3 +1217,258 @@ export const deleteRecurring = createServerFn({ method: "POST" })
     return loadSnapshot(context.userId);
   });
 
+
+
+/* ─── Savings goals ─────────────────────────────────────────────── */
+
+export const saveGoal = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(
+    (d: {
+      id?: number;
+      name: string;
+      targetAmount: number;
+      currentAmount?: number;
+      deadline?: string | null;
+      color?: string;
+      icon?: string;
+      note?: string;
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    const name = data.name.trim();
+    if (!name) throw new Error("Название цели обязательно");
+    const target = Number(data.targetAmount);
+    if (!Number.isFinite(target) || target <= 0) {
+      throw new Error("Целевая сумма должна быть больше 0");
+    }
+    const current = Math.max(0, Number(data.currentAmount ?? 0) || 0);
+    const color = data.color?.trim() || "#3F6B5C";
+    const icon = data.icon?.trim() || "target";
+    const note = data.note?.trim() || "";
+    const deadline = data.deadline || null;
+    const isCompleted = current >= target;
+
+    if (data.id) {
+      await sql`
+        update savings_goals set
+          name = ${name},
+          target_amount = ${target},
+          current_amount = ${current},
+          deadline = ${deadline},
+          color = ${color},
+          icon = ${icon},
+          note = ${note},
+          is_completed = ${isCompleted},
+          completed_at = case
+            when ${isCompleted} and completed_at is null then now()
+            when not ${isCompleted} then null
+            else completed_at
+          end,
+          updated_at = now()
+        where id = ${data.id} and user_id = ${context.userId}
+      `;
+    } else {
+      await sql`
+        insert into savings_goals (
+          user_id, name, target_amount, current_amount, deadline, color, icon, note,
+          is_completed, completed_at
+        ) values (
+          ${context.userId}, ${name}, ${target}, ${current}, ${deadline},
+          ${color}, ${icon}, ${note},
+          ${isCompleted}, ${isCompleted ? new Date().toISOString() : null}
+        )
+      `;
+    }
+    return loadSnapshot(context.userId);
+  });
+
+export const deleteGoal = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((d: { id: number }) => d)
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await sql`
+      delete from savings_goals
+      where id = ${data.id} and user_id = ${context.userId}
+    `;
+    return loadSnapshot(context.userId);
+  });
+
+/**
+ * Contribute money toward a savings goal.
+ * Optionally records an expense transaction so the budget reflects the transfer.
+ */
+export const contributeToGoal = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(
+    (d: {
+      goalId: number;
+      amount: number;
+      note?: string;
+      /** Create an expense transaction for the contribution (default true) */
+      createExpense?: boolean;
+      categoryId?: number | null;
+      envelopeId?: number | null;
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    const amount = Number(data.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Сумма взноса должна быть больше 0");
+    }
+    const note = data.note?.trim() || "";
+    const createExpense = data.createExpense !== false;
+
+    const [goal] = await sql<Record<string, unknown>>`
+      select * from savings_goals
+      where id = ${data.goalId} and user_id = ${context.userId}
+    `;
+    if (!goal) throw new Error("Цель не найдена");
+
+    const prev = num(goal.current_amount as string | number);
+    const target = num(goal.target_amount as string | number);
+    const next = prev + amount;
+    const isCompleted = next >= target;
+
+    await sql`
+      update savings_goals set
+        current_amount = ${next},
+        is_completed = ${isCompleted},
+        completed_at = case
+          when ${isCompleted} and completed_at is null then now()
+          else completed_at
+        end,
+        updated_at = now()
+      where id = ${data.goalId} and user_id = ${context.userId}
+    `;
+
+    let txId: number | null = null;
+    if (createExpense) {
+      const desc =
+        note ||
+        `Накопление: ${String(goal.name)}`;
+      const today = todayISO();
+      const rows = await sql<{ id: number }>`
+        insert into transactions (
+          user_id, amount, type, description, transaction_date,
+          category_id, envelope_id
+        ) values (
+          ${context.userId}, ${amount}, ${"expense"}, ${desc}, ${today},
+          ${data.categoryId ?? null}, ${data.envelopeId ?? null}
+        )
+        returning id
+      `;
+      txId = rows[0]?.id ?? null;
+      await awardXp(context.userId, XP_REWARDS.addTransaction);
+    }
+
+    try {
+      await sql`
+        insert into savings_goal_contributions (
+          user_id, goal_id, amount, note, transaction_id
+        ) values (
+          ${context.userId}, ${data.goalId}, ${amount}, ${note}, ${txId}
+        )
+      `;
+    } catch {
+      // contributions table may be missing
+    }
+
+    await refreshStreak(context.userId);
+    const snap = await loadSnapshot(context.userId);
+    const ctx = await buildUnlockContext(context.userId, snap);
+    await unlockAchievements(context.userId, ctx);
+    return loadSnapshot(context.userId);
+  });
+
+/**
+ * Start a new budget period with optional balance carry-over.
+ *
+ * - carryBalance: set initialBalance = current period balance
+ * - keepHistory: leave old transactions in DB (balance still correct because
+ *   calc is scoped to startDate); if false, deletes txs before new startDate
+ */
+export const startNewPeriod = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator(
+    (d: {
+      startDate: string;
+      endDate: string;
+      finalTarget: number;
+      /** Explicit initial balance; ignored when carryBalance is true */
+      initialBalance?: number;
+      carryBalance?: boolean;
+      /** Keep past transactions for history (default true) */
+      keepHistory?: boolean;
+      /** Reset envelope budgets to the same amounts (no-op, spent is period-scoped) */
+      resetEnvelopeSpent?: boolean;
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    const snap = await loadSnapshot(context.userId);
+    const today = todayISO();
+
+    if (!data.startDate || !data.endDate) {
+      throw new Error("Укажите даты периода");
+    }
+    if (data.endDate < data.startDate) {
+      throw new Error("Дата окончания не может быть раньше начала");
+    }
+
+    const periodBalance = calcCurrentBalance(
+      snap.settings.initialBalance,
+      snap.transactions,
+      snap.fixedEvents,
+      today,
+      snap.settings.startDate,
+    );
+
+    const carry = data.carryBalance !== false;
+    const initial = carry
+      ? periodBalance
+      : Number(data.initialBalance ?? periodBalance);
+    if (!Number.isFinite(initial)) {
+      throw new Error("Некорректный стартовый баланс");
+    }
+    const target = Number(data.finalTarget);
+    if (!Number.isFinite(target)) {
+      throw new Error("Некорректная целевая сумма");
+    }
+
+    const keepHistory = data.keepHistory !== false;
+
+    if (!keepHistory) {
+      // Remove transactions strictly before the new period start
+      await sql`
+        delete from transactions
+        where user_id = ${context.userId}
+          and transaction_date < ${data.startDate}
+      `;
+      await sql`
+        delete from fixed_events
+        where user_id = ${context.userId}
+          and event_date < ${data.startDate}
+      `;
+    }
+
+    await sql`
+      update user_settings set
+        start_date = ${data.startDate},
+        end_date = ${data.endDate},
+        initial_balance = ${initial},
+        final_target = ${target},
+        last_budget_day = null,
+        updated_at = now()
+      where user_id = ${context.userId}
+    `;
+
+    // Envelope spent is computed from period-scoped txs — no DB reset needed.
+    // Optional: user can re-save envelopes later if they want new budgets.
+
+    await refreshStreak(context.userId);
+    return loadSnapshot(context.userId);
+  });

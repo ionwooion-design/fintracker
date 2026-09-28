@@ -18,6 +18,7 @@ import {
 import { formatMoney, cn } from "@/lib/utils";
 import { RecurringForm, RecurringList } from "@/components/finance/recurring-form";
 import { CategoryIcon } from "@/lib/finance/icons";
+import { GoalsPanel } from "@/components/finance/goals-panel";
 
 export const Route = createFileRoute("/settings")({ component: Page });
 
@@ -204,7 +205,7 @@ function CategoryManager({
 
 function Inner() {
   const user = useCurrentUser();
-  const { snapshot, isPending } = useFinance();
+  const { snapshot, computed, isPending } = useFinance();
   const mut = useFinanceMutations();
   const [userName, setUserName] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -344,6 +345,10 @@ function Inner() {
             Сохранить все настройки
           </Button>
         </Card>
+
+        {snapshot && computed && (
+          <GoalsPanel snapshot={snapshot} computed={computed} mode="full" />
+        )}
 
         {/* 2. Фиксированные события — сразу после бюджетного периода */}
         <Card>
