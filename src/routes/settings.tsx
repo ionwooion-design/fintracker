@@ -221,6 +221,7 @@ function Inner() {
   const [filter, setFilter] = useState<"all" | "in" | "out">("all");
   const [editingRecurring, setEditingRecurring] = useState<RecurringTransaction | null>(null);
   const [showRecurringForm, setShowRecurringForm] = useState(false);
+  const [dangerOpen, setDangerOpen] = useState(false);
 
   useEffect(() => {
     if (!snapshot) return;
@@ -344,41 +345,7 @@ function Inner() {
           </Button>
         </Card>
 
-        <Card>
-          <h2 className="font-display text-lg">Уведомления о лимите</h2>
-          <ul className="mt-2 space-y-1.5 text-sm text-muted">
-            <li>· При достижении 80% дневного лимита — предупреждение</li>
-            <li>· При превышении дневного лимита — уведомление об ошибке</li>
-            <li>· При перерасходе конверта — отдельное уведомление</li>
-            <li>
-              · За 3 дня до конца периода и после его окончания — баннер с
-              предложением начать новый период
-            </li>
-          </ul>
-          <p className="mt-2 text-xs text-subtle">
-            Уведомления показываются в приложении (toast). Повторы в рамках
-            одной сессии не дублируются.
-          </p>
-        </Card>
-
-        <CategoryManager
-          kind="expense"
-          title="Категории расходов"
-          categories={snapshot.categories}
-          pending={catPending}
-          onSave={(d) => mut.saveCat.mutate(d)}
-          onDelete={(id) => mut.deleteCat.mutate({ id })}
-        />
-
-        <CategoryManager
-          kind="income"
-          title="Категории доходов"
-          categories={snapshot.categories}
-          pending={catPending}
-          onSave={(d) => mut.saveCat.mutate(d)}
-          onDelete={(id) => mut.deleteCat.mutate({ id })}
-        />
-
+        {/* 2. Фиксированные события — сразу после бюджетного периода */}
         <Card>
           <h2 className="font-display text-lg">Фиксированные события</h2>
           <div className="mt-2 flex gap-1">
@@ -486,6 +453,7 @@ function Inner() {
           </form>
         </Card>
 
+        {/* 3. Повторяющиеся */}
         <Card>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="font-display text-lg">Повторяющиеся</h2>
@@ -550,20 +518,73 @@ function Inner() {
           />
         </Card>
 
+        {/* 4–5. Категории */}
+        <CategoryManager
+          kind="expense"
+          title="Категории расходов"
+          categories={snapshot.categories}
+          pending={catPending}
+          onSave={(d) => mut.saveCat.mutate(d)}
+          onDelete={(id) => mut.deleteCat.mutate({ id })}
+        />
+
+        <CategoryManager
+          kind="income"
+          title="Категории доходов"
+          categories={snapshot.categories}
+          pending={catPending}
+          onSave={(d) => mut.saveCat.mutate(d)}
+          onDelete={(id) => mut.deleteCat.mutate({ id })}
+        />
+
+        {/* 6. Уведомления */}
         <Card>
-          <h2 className="font-display text-lg">Опасная зона</h2>
-          <p className="mt-1 text-sm text-muted">
-            Сбросит операции, конверты, события и достижения. Профиль входа сохранится.
+          <h2 className="font-display text-lg">Уведомления о лимите</h2>
+          <ul className="mt-2 space-y-1.5 text-sm text-muted">
+            <li>· При достижении 80% дневного лимита — предупреждение</li>
+            <li>· При превышении дневного лимита — уведомление об ошибке</li>
+            <li>· При перерасходе конверта — отдельное уведомление</li>
+            <li>
+              · За 3 дня до конца периода и после его окончания — баннер с
+              предложением начать новый период
+            </li>
+          </ul>
+          <p className="mt-2 text-xs text-subtle">
+            Уведомления показываются в приложении (toast). Повторы в рамках
+            одной сессии не дублируются.
           </p>
-          <Button
-            variant="danger"
-            className="mt-3 w-full"
-            onClick={() => {
-              if (confirm("Точно сбросить все финансовые данные?")) mut.reset.mutate(undefined as never);
-            }}
+        </Card>
+
+        {/* 7. Опасная зона — свёрнута по умолчанию, в самом низу */}
+        <Card className="border-border/60">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 text-left"
+            onClick={() => setDangerOpen((v) => !v)}
+            aria-expanded={dangerOpen}
           >
-            Сбросить данные
-          </Button>
+            <span className="text-sm font-medium text-muted">Опасная зона</span>
+            <span className="text-xs text-subtle">{dangerOpen ? "Скрыть" : "Показать"}</span>
+          </button>
+          {dangerOpen && (
+            <div className="mt-3 border-t border-border pt-3">
+              <p className="text-sm text-muted">
+                Сбросит операции, конверты, события и достижения. Профиль входа
+                сохранится.
+              </p>
+              <Button
+                variant="danger"
+                className="mt-3 w-full"
+                onClick={() => {
+                  if (confirm("Точно сбросить все финансовые данные?")) {
+                    mut.reset.mutate(undefined as never);
+                  }
+                }}
+              >
+                Сбросить данные
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
     </AppShell>
