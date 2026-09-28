@@ -195,13 +195,23 @@ function StatsInner() {
  {visibleDefs.map((def) => {
  const unlocked = unlockedMap.get(def.code);
  const rarityColor = RARITY_COLORS[def.rarity];
+ const justUnlocked =
+ unlocked &&
+ Date.now() - new Date(unlocked.unlockedAt).getTime() < 90_000;
  return (
  <li
  key={def.code}
  className={`flex items-start gap-3 rounded-lg px-3 py-2.5 transition-opacity ${
  unlocked ? "bg-elevated" : "bg-elevated/50 opacity-60"
- }`}
- style={unlocked ? { boxShadow: `inset 3px 0 0 ${rarityColor}` } : undefined}
+ } ${justUnlocked ? "ach-just-unlocked" : ""}`}
+ style={
+ unlocked
+ ? {
+ boxShadow: `inset 3px 0 0 ${rarityColor}`,
+ ["--ach-flash" as string]: rarityColor,
+ }
+ : undefined
+ }
  >
  <div
  className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full"

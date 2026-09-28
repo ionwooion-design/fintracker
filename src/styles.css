@@ -109,3 +109,143 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Achievement unlock celebrations ───────────────────────── */
+.ach-unlock-card {
+  background: var(--color-elevated);
+  border: 1px solid color-mix(in oklab, var(--ach-color, #FBBF24) 35%, transparent);
+  animation: ach-card-glow 2.4s ease-in-out infinite;
+}
+
+.ach-unlock-shine {
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    color-mix(in oklab, var(--ach-color, #FBBF24) 28%, transparent) 48%,
+    transparent 62%
+  );
+  background-size: 200% 100%;
+  animation: ach-shine 2.2s ease-in-out infinite;
+}
+
+.ach-unlock-icon {
+  animation: ach-icon-bounce 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.ach-unlock-pop-in {
+  animation: ach-pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.ach-unlock-pop-out {
+  animation: ach-pop-out 0.3s ease-in both;
+}
+
+.ach-unlock-fade-out {
+  animation: ach-fade-out 0.3s ease-in both;
+}
+
+.ach-unlock-idle .ach-unlock-icon {
+  animation: ach-icon-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ach-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes ach-pop-out {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.88) translateY(-12px);
+  }
+}
+
+@keyframes ach-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ach-icon-bounce {
+  0% {
+    transform: scale(0) rotate(-20deg);
+  }
+  60% {
+    transform: scale(1.15) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes ach-icon-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: brightness(1.15);
+  }
+}
+
+@keyframes ach-shine {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -40% 0;
+  }
+}
+
+@keyframes ach-card-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+/* Rarity flash on list item when just unlocked (stats page) */
+.ach-just-unlocked {
+  animation: ach-list-flash 1.2s ease-out both;
+}
+
+@keyframes ach-list-flash {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 var(--ach-flash, #FBBF24);
+  }
+  40% {
+    transform: scale(1.02);
+    box-shadow: 0 0 24px 4px color-mix(in oklab, var(--ach-flash, #FBBF24) 50%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ach-unlock-pop-in,
+  .ach-unlock-pop-out,
+  .ach-unlock-icon,
+  .ach-unlock-shine,
+  .ach-unlock-card,
+  .ach-just-unlocked {
+    animation: none !important;
+  }
+}
