@@ -177,7 +177,7 @@ function Dashboard() {
  <p className="mb-2 text-sm text-muted">
  Вставьте текст сообщений банка. Сумма ищется по словам «оплата», «покупка», «списание».
  </p>
- <Textarea value={smsText} onChange={(e) => setSmsText(e.target.value)} placeholder="Покупка 1250.00 RUB Пятёрочка" />
+ <Textarea value={smsText} onChange={(e) => setSmsText(e.target.value)} placeholder="Karta 4***3597 26-09-26 12:04:40. Oplata 21.80 BYN. BLR SHOP SOSEDI. Balance: 555.88 BYN\nили: Покупка 1250.00 RUB Пятёрочка" />
  {smsReport && <p className="mt-2 text-sm">{smsReport}</p>}
  <Button
  className="mt-3 w-full"

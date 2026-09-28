@@ -672,9 +672,10 @@ export const importSms = createServerFn({ method: "POST" })
           envelopeId: r.envelope_id,
         })),
       );
+      const txType = p.type === "income" ? "income" : "expense";
       await sql`
         insert into transactions (user_id, amount, type, description, transaction_date, category_id, envelope_id)
-        values (${context.userId}, ${p.amount}, ${"expense"}, ${p.description}, ${p.date}, ${match.categoryId}, ${match.envelopeId})
+        values (${context.userId}, ${p.amount}, ${txType}, ${p.description}, ${p.date}, ${match.categoryId}, ${match.envelopeId})
       `;
       success += 1;
     }
