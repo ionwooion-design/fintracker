@@ -23,6 +23,14 @@ export type UserSettings = {
   privacyAccepted: boolean;
   darkTheme: boolean;
   currency: CurrencyCode;
+  /** Gamification */
+  level: number;
+  totalXp: number;
+  title: string;
+  longestStreak: number;
+  totalTransactions: number;
+  daysLogged: number;
+  lastLoginDate: string | null;
 };
 
 export const CURRENCIES: {
@@ -84,6 +92,8 @@ export type Achievement = {
   description: string;
   icon: string;
   unlockedAt: string;
+  rarity?: string;
+  xpReward?: number;
 };
 
 export type RecurringFrequency =

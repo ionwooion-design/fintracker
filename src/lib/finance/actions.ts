@@ -3,11 +3,17 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
 import { num, todayISO } from "@/lib/utils";
 import {
-  ACHIEVEMENT_DEFS,
   DEFAULT_CATEGORIES,
   DEFAULT_ENVELOPES,
   DEFAULT_INCOME_CATEGORIES,
 } from "./defaults";
+import {
+  ACHIEVEMENT_DEFS,
+  XP_REWARDS,
+  levelFromXp,
+  titleForLevel,
+  type AchievementDef,
+} from "./gamification";
 import { calcDailyLimit, calcCurrentBalance, nextStreak, computeNextOccurrence } from "./calc";
 import { matchRule, parseSmsText } from "./sms";
 import type {
@@ -41,6 +47,8 @@ function mapCurrency(raw: unknown): CurrencyCode {
 }
 
 function mapSettings(row: Record<string, unknown>, userId: string): UserSettings {
+  const totalXp = num(row.total_xp as string | number) || 0;
+  const level = num(row.level as string | number) || levelFromXp(totalXp);
   return {
     userId,
     userName: String(row.user_name ?? ""),
@@ -54,6 +62,13 @@ function mapSettings(row: Record<string, unknown>, userId: string): UserSettings
     privacyAccepted: Boolean(row.privacy_accepted),
     darkTheme: Boolean(row.dark_theme),
     currency: mapCurrency(row.currency),
+    level,
+    totalXp,
+    title: String(row.title ?? titleForLevel(level)),
+    longestStreak: num(row.longest_streak as string | number) || 0,
+    totalTransactions: num(row.total_transactions as string | number) || 0,
+    daysLogged: num(row.days_logged as string | number) || 0,
+    lastLoginDate: row.last_login_date ? String(row.last_login_date) : null,
   };
 }
 
@@ -193,8 +208,13 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
     description: string;
     icon: string;
     unlocked_at: string;
+    rarity?: string;
+    xp_reward?: number | string;
   }>`
-    select id, code, name, description, icon, unlocked_at from achievements
+    select id, code, name, description, icon, unlocked_at,
+           coalesce(rarity, 'common') as rarity,
+           coalesce(xp_reward, 0) as xp_reward
+    from achievements
     where user_id = ${userId} order by unlocked_at desc
   `;
 
@@ -246,29 +266,229 @@ async function loadSnapshot(userId: string): Promise<FinanceSnapshot> {
       eventDate: String(e.event_date),
     })) as FixedEvent[],
     achievements: achievements.map((a) => ({
-      id: a.id,
-      code: a.code,
-      name: a.name,
-      description: a.description,
-      icon: a.icon,
+      id: Number(a.id),
+      code: String(a.code),
+      name: String(a.name),
+      description: String(a.description),
+      icon: String(a.icon),
       unlockedAt: String(a.unlocked_at),
+      rarity: a.rarity != null ? String(a.rarity) : "common",
+      xpReward: a.xp_reward != null ? num(a.xp_reward as string | number) : 0,
     })) as Achievement[],
     recurring: recurringRows.map(mapRecurring),
   };
 }
 
-async function unlockAchievements(userId: string, streak: number, txCount: number) {
-  const sql = await getSql();
-  for (const def of ACHIEVEMENT_DEFS) {
-    if (def.code === "first_step" && txCount < 1) continue;
-    if (def.minStreak > 0 && streak < def.minStreak) continue;
-    if (def.code === "first_step" && txCount < 1) continue;
-    await sql`
-      insert into achievements (user_id, code, name, description, icon)
-      values (${userId}, ${def.code}, ${def.name}, ${def.description}, ${def.icon})
-      on conflict (user_id, code) do nothing
-    `;
+type UnlockContext = {
+  streak: number;
+  longestStreak: number;
+  txCount: number;
+  expenseCount: number;
+  incomeCount: number;
+  daysLogged: number;
+  envelopeCount: number;
+  categoryCount: number;
+  recurringCount: number;
+  level: number;
+  balance: number;
+  finalTarget: number;
+  initialBalance: number;
+  distinctCategories: number;
+  allEnvelopesUnder80: boolean;
+  hasNoSpendDay: boolean;
+  underBudgetToday: boolean;
+  spentToday: number;
+  dailyLimit: number;
+  isNightHour: boolean;
+  smsImported?: boolean;
+};
+
+function conditionMet(def: AchievementDef, ctx: UnlockContext): boolean {
+  const c = def.condition;
+  switch (c.type) {
+    case "streak":
+      return ctx.streak >= c.min;
+    case "longest_streak":
+      return ctx.longestStreak >= c.min;
+    case "tx_count":
+      return ctx.txCount >= c.min;
+    case "tx_count_type":
+      return c.txType === "expense" ? ctx.expenseCount >= c.min : ctx.incomeCount >= c.min;
+    case "days_logged":
+      return ctx.daysLogged >= c.min;
+    case "envelopes_created":
+      return ctx.envelopeCount >= c.min;
+    case "categories_created":
+      return ctx.categoryCount >= c.min;
+    case "recurring_created":
+      return ctx.recurringCount >= c.min;
+    case "level":
+      return ctx.level >= c.min;
+    case "balance_above_target":
+      return ctx.balance >= ctx.finalTarget && ctx.finalTarget > 0;
+    case "saved_percent": {
+      const span = ctx.initialBalance - ctx.finalTarget;
+      if (span <= 0) return ctx.balance >= ctx.finalTarget;
+      const progress = ((ctx.initialBalance - ctx.balance) / span) * 100;
+      // if saving upward (target > initial)
+      if (ctx.finalTarget > ctx.initialBalance) {
+        const up = ((ctx.balance - ctx.initialBalance) / (ctx.finalTarget - ctx.initialBalance)) * 100;
+        return up >= c.percent;
+      }
+      return progress >= c.percent;
+    }
+    case "first_income":
+      return ctx.incomeCount >= 1;
+    case "first_expense":
+      return ctx.expenseCount >= 1;
+    case "sms_import":
+      return Boolean(ctx.smsImported);
+    case "perfect_week":
+      return ctx.streak >= 7;
+    case "envelope_under":
+      return ctx.allEnvelopesUnder80;
+    case "diversity_categories":
+      return ctx.distinctCategories >= c.min;
+    case "no_spend_day":
+      return ctx.hasNoSpendDay;
+    case "custom":
+      if (c.code === "night_owl") return ctx.isNightHour;
+      if (c.code === "big_but_under")
+        return ctx.underBudgetToday && ctx.spentToday > 0 && ctx.dailyLimit > 0 && ctx.spentToday >= ctx.dailyLimit * 0.7;
+      return false;
+    default:
+      return false;
   }
+}
+
+async function awardXp(userId: string, amount: number) {
+  if (amount <= 0) return;
+  const sql = await getSql();
+  const rows = await sql<{ total_xp: number | string; level: number | string }>`
+    select coalesce(total_xp, 0) as total_xp, coalesce(level, 1) as level
+    from user_settings where user_id = ${userId}
+  `;
+  if (!rows.length) return;
+  const prevXp = num(rows[0].total_xp);
+  const newXp = prevXp + amount;
+  const newLevel = levelFromXp(newXp);
+  const newTitle = titleForLevel(newLevel);
+  await sql`
+    update user_settings
+    set total_xp = ${newXp},
+        level = ${newLevel},
+        title = ${newTitle},
+        updated_at = now()
+    where user_id = ${userId}
+  `;
+}
+
+async function unlockAchievements(userId: string, ctx: UnlockContext) {
+  const sql = await getSql();
+  let totalXpGain = 0;
+  for (const def of ACHIEVEMENT_DEFS) {
+    if (!conditionMet(def, ctx)) continue;
+    const inserted = await sql`
+      insert into achievements (user_id, code, name, description, icon, rarity, xp_reward)
+      values (
+        ${userId}, ${def.code}, ${def.name}, ${def.description}, ${def.icon},
+        ${def.rarity}, ${def.xpReward}
+      )
+      on conflict (user_id, code) do nothing
+      returning id
+    `;
+    if (inserted.length > 0) {
+      totalXpGain += def.xpReward;
+    }
+  }
+  if (totalXpGain > 0) {
+    await awardXp(userId, totalXpGain);
+  }
+}
+
+async function buildUnlockContext(userId: string, snap: FinanceSnapshot, extra?: Partial<UnlockContext>): Promise<UnlockContext> {
+  const today = todayISO();
+  const expenseCount = snap.transactions.filter((t) => t.type === "expense").length;
+  const incomeCount = snap.transactions.filter((t) => t.type === "income").length;
+  const distinctCategories = new Set(
+    snap.transactions.map((t) => t.categoryId).filter((id): id is number => id != null),
+  ).size;
+  const spentToday = snap.transactions
+    .filter((t) => t.transactionDate === today && t.type === "expense")
+    .reduce((s, t) => s + t.amount, 0);
+  const balance = calcCurrentBalance(
+    snap.settings.initialBalance,
+    snap.transactions,
+    snap.fixedEvents,
+    today,
+  );
+  const daysRemaining = Math.max(
+    0,
+    Math.round(
+      (new Date(`${snap.settings.endDate}T12:00:00`).getTime() -
+        new Date(`${today}T12:00:00`).getTime()) /
+        86400000,
+    ),
+  );
+  const dailyLimit = calcDailyLimit(
+    balance,
+    snap.settings.finalTarget,
+    snap.fixedEvents,
+    daysRemaining,
+    today,
+  );
+  const underBudgetToday = spentToday <= dailyLimit;
+  // envelope usage
+  const envelopeSpent = new Map<number, number>();
+  for (const t of snap.transactions) {
+    if (t.type === "expense" && t.envelopeId != null) {
+      envelopeSpent.set(t.envelopeId, (envelopeSpent.get(t.envelopeId) ?? 0) + t.amount);
+    }
+  }
+  let allEnvelopesUnder80 = snap.envelopes.length > 0;
+  for (const e of snap.envelopes) {
+    const spent = envelopeSpent.get(e.id) ?? 0;
+    if (e.budget > 0 && spent / e.budget >= 0.8) {
+      allEnvelopesUnder80 = false;
+      break;
+    }
+  }
+  // no-spend day: any past day with transactions logged but 0 expense
+  const byDate = new Map<string, { expense: number; any: boolean }>();
+  for (const t of snap.transactions) {
+    const d = byDate.get(t.transactionDate) ?? { expense: 0, any: false };
+    d.any = true;
+    if (t.type === "expense") d.expense += t.amount;
+    byDate.set(t.transactionDate, d);
+  }
+  const hasNoSpendDay = [...byDate.values()].some((d) => d.any && d.expense === 0);
+
+  const hour = new Date().getHours();
+  const isNightHour = hour >= 0 && hour < 5;
+
+  return {
+    streak: snap.settings.currentStreak,
+    longestStreak: snap.settings.longestStreak,
+    txCount: snap.transactions.length,
+    expenseCount,
+    incomeCount,
+    daysLogged: snap.settings.daysLogged,
+    envelopeCount: snap.envelopes.length,
+    categoryCount: snap.categories.length,
+    recurringCount: snap.recurring.filter((r) => r.isActive).length,
+    level: snap.settings.level,
+    balance,
+    finalTarget: snap.settings.finalTarget,
+    initialBalance: snap.settings.initialBalance,
+    distinctCategories,
+    allEnvelopesUnder80,
+    hasNoSpendDay,
+    underBudgetToday,
+    spentToday,
+    dailyLimit,
+    isNightHour,
+    ...extra,
+  };
 }
 
 async function refreshStreak(userId: string) {
@@ -305,18 +525,48 @@ async function refreshStreak(userId: string) {
     dailyLimit,
     today,
   );
+  const underBudget = spentToday <= dailyLimit;
+  let xpGain = 0;
+  if (underBudget && next.streak > 0 && next.lastBudgetDay === today) {
+    if (snap.settings.lastBudgetDay !== today) {
+      xpGain += XP_REWARDS.underBudgetDay;
+      xpGain += Math.min(30, next.streak) * XP_REWARDS.streakBonusPerDay;
+    }
+  }
+  const longest = Math.max(snap.settings.longestStreak, next.streak);
+  const loggedDates = new Set(snap.transactions.map((t) => t.transactionDate));
+  const daysLogged = loggedDates.size;
+  const txCount = snap.transactions.length;
+
   const sql = await getSql();
   await sql`
     update user_settings
     set current_streak = ${next.streak},
         last_budget_day = ${next.lastBudgetDay},
         last_streak_date = ${today},
+        longest_streak = ${longest},
+        total_transactions = ${txCount},
+        days_logged = ${daysLogged},
+        last_login_date = ${today},
         updated_at = now()
     where user_id = ${userId}
   `;
-  await unlockAchievements(userId, next.streak, snap.transactions.length);
+  if (xpGain > 0) {
+    await awardXp(userId, xpGain);
+  }
+  const fresh = await loadSnapshot(userId);
+  const ctx = await buildUnlockContext(userId, {
+    ...fresh,
+    settings: {
+      ...fresh.settings,
+      currentStreak: next.streak,
+      longestStreak: longest,
+      daysLogged,
+      totalTransactions: txCount,
+    },
+  });
+  await unlockAchievements(userId, ctx);
 }
-
 
 async function generateDueRecurring(userId: string) {
   const sql = await getSql();
@@ -481,6 +731,9 @@ export const addTransaction = createServerFn({ method: "POST" })
         ${data.envelopeId}
       )
     `;
+    const txXp =
+      data.type === "income" ? XP_REWARDS.addIncome : XP_REWARDS.addTransaction;
+    await awardXp(context.userId, txXp);
     await refreshStreak(context.userId);
     return loadSnapshot(context.userId);
   });
@@ -552,8 +805,12 @@ export const saveEnvelope = createServerFn({ method: "POST" })
         insert into envelopes (user_id, name, budget, color, icon)
         values (${context.userId}, ${data.name.trim()}, ${data.budget}, ${data.color}, ${data.icon})
       `;
+      await awardXp(context.userId, XP_REWARDS.createEnvelope);
     }
-    return loadSnapshot(context.userId);
+    const snap = await loadSnapshot(context.userId);
+    const ctx = await buildUnlockContext(context.userId, snap);
+    await unlockAchievements(context.userId, ctx);
+    return snap;
   });
 
 export const deleteEnvelope = createServerFn({ method: "POST" })
@@ -598,8 +855,12 @@ export const saveCategory = createServerFn({ method: "POST" })
           values (${context.userId}, ${data.name.trim()}, ${data.color}, ${data.icon})
         `;
       }
+      await awardXp(context.userId, XP_REWARDS.createCategory);
     }
-    return loadSnapshot(context.userId);
+    const snap = await loadSnapshot(context.userId);
+    const ctx = await buildUnlockContext(context.userId, snap);
+    await unlockAchievements(context.userId, ctx);
+    return snap;
   });
 
 export const deleteCategory = createServerFn({ method: "POST" })
@@ -679,8 +940,13 @@ export const importSms = createServerFn({ method: "POST" })
       `;
       success += 1;
     }
+    if (success > 0) {
+      await awardXp(context.userId, XP_REWARDS.smsImport + success * XP_REWARDS.addTransaction);
+    }
     await refreshStreak(context.userId);
     const snap = await loadSnapshot(context.userId);
+    const ctx = await buildUnlockContext(context.userId, snap, { smsImported: success > 0 });
+    await unlockAchievements(context.userId, ctx);
     return { successCount: success, failedCount: 0, snap };
   });
 
@@ -847,9 +1113,15 @@ export const saveRecurring = createServerFn({ method: "POST" })
       `;
     }
 
+    if (!data.id) {
+      await awardXp(context.userId, XP_REWARDS.createRecurring);
+    }
     await generateDueRecurring(context.userId);
     await refreshStreak(context.userId);
-    return loadSnapshot(context.userId);
+    const snap = await loadSnapshot(context.userId);
+    const ctx = await buildUnlockContext(context.userId, snap);
+    await unlockAchievements(context.userId, ctx);
+    return snap;
   });
 
 export const pauseRecurring = createServerFn({ method: "POST" })

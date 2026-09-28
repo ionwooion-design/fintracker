@@ -86,6 +86,7 @@ function Dashboard() {
  <Stat label="Дней осталось" value={String(computed.daysRemaining)} />
  <Stat label="Цель" value={formatMoney(snapshot.settings.finalTarget, currency)} />
  <Stat label="Серия" value={`${computed.currentStreak} дн.`} />
+ <Stat label="Уровень" value={`${snapshot.settings.level ?? 1} · ${snapshot.settings.title ?? "Новичок"}`} />
  </div>
 
  <Card>

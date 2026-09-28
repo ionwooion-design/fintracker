@@ -7,6 +7,15 @@ import { CategoryIcon } from "@/lib/finance/icons";
 import { useFinance } from "@/lib/finance/use-finance";
 import { formatMoney } from "@/lib/utils";
 import { ThemeSync } from "@/components/theme-sync";
+import {
+  ACHIEVEMENT_DEFS,
+  CATEGORY_LABELS,
+  RARITY_COLORS,
+  RARITY_LABELS,
+  computeGamificationStats,
+  type AchievementCategory,
+  type AchievementRarity,
+} from "@/lib/finance/gamification";
 
 export const Route = createFileRoute("/stats")({ component: StatsPage });
 
@@ -20,6 +29,7 @@ function StatsPage() {
 
 function StatsInner() {
  const { snapshot, computed, isPending } = useFinance();
+ const [catFilter, setCatFilter] = useState<"all" | AchievementCategory>("all");
  if (isPending || !snapshot || !computed) {
  return (
  <AppShell title="Статистика">
@@ -34,6 +44,18 @@ function StatsInner() {
  value: c.amount,
  color: c.category.color,
  }));
+ const unlockedCodes = new Set(snapshot.achievements.map((a) => a.code));
+ const unlockedMap = new Map(snapshot.achievements.map((a) => [a.code, a]));
+ const gami = computeGamificationStats(
+ snapshot.settings.totalXp ?? 0,
+ snapshot.settings.longestStreak ?? 0,
+ snapshot.settings.totalTransactions ?? snapshot.transactions.length,
+ snapshot.settings.daysLogged ?? 0,
+ unlockedCodes,
+ );
+ const visibleDefs = ACHIEVEMENT_DEFS.filter(
+ (d) => catFilter === "all" || d.category === catFilter,
+ );
 
  return (
  <AppShell title="Статистика">
@@ -87,23 +109,139 @@ function StatsInner() {
  </div>
  </Card>
 
- <Card>
- <h2 className="font-display text-lg">Достижения</h2>
- {snapshot.achievements.length === 0 ? (
- <p className="mt-2 text-sm text-muted">Пока пусто — держите дневной лимит несколько дней подряд.</p>
- ) : (
- <ul className="mt-3 space-y-2">
- {snapshot.achievements.map((a) => (
- <li key={a.id} className="flex items-center gap-3 bg-elevated px-3 py-2">
- <CategoryIcon name={a.icon} className="size-5" />
+ <Card className="overflow-hidden">
+ <div className="flex items-start justify-between gap-3">
  <div>
- <p className="text-sm font-medium">{a.name}</p>
- <p className="text-xs text-muted">{a.description}</p>
+ <p className="text-xs font-medium uppercase tracking-wide text-muted">Уровень</p>
+ <h2 className="font-display text-2xl tabular-nums">
+ {gami.level}{" "}
+ <span className="text-base font-normal text-muted">· {gami.title}</span>
+ </h2>
+ </div>
+ <div className="text-right">
+ <p className="text-xs text-muted">Всего XP</p>
+ <p className="font-mono text-lg tabular-nums">{gami.totalXp}</p>
+ </div>
+ </div>
+ <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-elevated">
+ <div
+ className="h-full rounded-full bg-accent transition-[width] duration-500"
+ style={{ width: `${gami.xpPercent}%` }}
+ />
+ </div>
+ <p className="mt-1.5 text-xs text-muted">
+ {gami.xpInLevel} / {gami.xpNeeded} XP до уровня {gami.level + 1}
+ </p>
+ <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+ <div className="rounded-lg bg-elevated px-2 py-2">
+ <p className="font-mono text-lg tabular-nums">{gami.longestStreak}</p>
+ <p className="text-[10px] uppercase tracking-wide text-muted">Рекорд серии</p>
+ </div>
+ <div className="rounded-lg bg-elevated px-2 py-2">
+ <p className="font-mono text-lg tabular-nums">{gami.totalTransactions}</p>
+ <p className="text-[10px] uppercase tracking-wide text-muted">Операций</p>
+ </div>
+ <div className="rounded-lg bg-elevated px-2 py-2">
+ <p className="font-mono text-lg tabular-nums">
+ {gami.unlockedCount}/{gami.totalAchievements}
+ </p>
+ <p className="text-[10px] uppercase tracking-wide text-muted">Ачивки</p>
+ </div>
+ </div>
+ </Card>
+
+ <Card>
+ <div className="mb-3 flex items-center justify-between">
+ <h2 className="font-display text-lg">Достижения</h2>
+ <div className="flex gap-1.5">
+ {(Object.keys(RARITY_LABELS) as AchievementRarity[]).map((r) => (
+ <span
+ key={r}
+ className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px]"
+ style={{ background: `${RARITY_COLORS[r]}22`, color: RARITY_COLORS[r] }}
+ >
+ <span className="size-1.5 rounded-full" style={{ background: RARITY_COLORS[r] }} />
+ {gami.byRarity[r]}
+ </span>
+ ))}
+ </div>
+ </div>
+
+ {/* Category filters */}
+ <div className="mb-3 flex flex-wrap gap-1.5">
+ <button
+ type="button"
+ onClick={() => setCatFilter("all")}
+ className={`rounded-full px-2.5 py-1 text-xs ${catFilter === "all" ? "bg-accent text-accent-fg" : "bg-elevated text-muted"}`}
+ >
+ Все
+ </button>
+ {(Object.keys(CATEGORY_LABELS) as AchievementCategory[]).map((c) => (
+ <button
+ key={c}
+ type="button"
+ onClick={() => setCatFilter(c)}
+ className={`rounded-full px-2.5 py-1 text-xs ${catFilter === c ? "bg-accent text-accent-fg" : "bg-elevated text-muted"}`}
+ >
+ {CATEGORY_LABELS[c]}{" "}
+ <span className="opacity-70">
+ {gami.byCategory[c].unlocked}/{gami.byCategory[c].total}
+ </span>
+ </button>
+ ))}
+ </div>
+
+ <ul className="space-y-2">
+ {visibleDefs.map((def) => {
+ const unlocked = unlockedMap.get(def.code);
+ const rarityColor = RARITY_COLORS[def.rarity];
+ return (
+ <li
+ key={def.code}
+ className={`flex items-start gap-3 rounded-lg px-3 py-2.5 transition-opacity ${
+ unlocked ? "bg-elevated" : "bg-elevated/50 opacity-60"
+ }`}
+ style={unlocked ? { boxShadow: `inset 3px 0 0 ${rarityColor}` } : undefined}
+ >
+ <div
+ className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full"
+ style={{
+ background: unlocked ? `${rarityColor}22` : "var(--color-elevated)",
+ color: unlocked ? rarityColor : "var(--color-muted)",
+ }}
+ >
+ <CategoryIcon name={def.icon} className="size-4" />
+ </div>
+ <div className="min-w-0 flex-1">
+ <div className="flex items-center gap-2">
+ <p className="text-sm font-medium">
+ {def.secret && !unlocked ? "???" : def.name}
+ </p>
+ <span
+ className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+ style={{ background: `${rarityColor}22`, color: rarityColor }}
+ >
+ {RARITY_LABELS[def.rarity]}
+ </span>
+ {unlocked && (
+ <span className="ml-auto text-[10px] text-muted">+{def.xpReward} XP</span>
+ )}
+ </div>
+ <p className="mt-0.5 text-xs text-muted">
+ {def.secret && !unlocked
+ ? "Секретное достижение — откройте сами"
+ : def.description}
+ </p>
+ {unlocked && (
+ <p className="mt-1 text-[10px] text-muted">
+ Открыто {new Date(unlocked.unlockedAt).toLocaleDateString("ru-RU")}
+ </p>
+ )}
  </div>
  </li>
- ))}
+ );
+ })}
  </ul>
- )}
  </Card>
  </div>
  </AppShell>

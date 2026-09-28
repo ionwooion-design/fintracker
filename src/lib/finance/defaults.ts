@@ -25,40 +25,5 @@ export const DEFAULT_ENVELOPES = [
   { name: "Свободные деньги", budget: 10000, color: "#3F6B5C", icon: "wallet" },
 ] as const;
 
-export const ACHIEVEMENT_DEFS = [
-  {
-    code: "first_step",
-    name: "Первый шаг",
-    description: "Добавлена первая операция",
-    icon: "flag",
-    minStreak: 0,
-  },
-  {
-    code: "beginner_saver",
-    name: "Начинающий эконом",
-    description: "3 дня подряд в бюджете",
-    icon: "sprout",
-    minStreak: 3,
-  },
-  {
-    code: "budget_master",
-    name: "Мастер бюджета",
-    description: "7 дней подряд в бюджете",
-    icon: "award",
-    minStreak: 7,
-  },
-  {
-    code: "iron_will",
-    name: "Железная воля",
-    description: "14 дней подряд в бюджете",
-    icon: "shield",
-    minStreak: 14,
-  },
-  {
-    code: "month_legend",
-    name: "Легенда месяца",
-    description: "30 дней подряд в бюджете",
-    icon: "crown",
-    minStreak: 30,
-  },
-] as const;
+/** Re-export from gamification for backward compatibility */
+export { ACHIEVEMENT_DEFS } from "./gamification";
