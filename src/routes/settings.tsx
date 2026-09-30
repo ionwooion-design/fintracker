@@ -19,6 +19,8 @@ import { formatMoney, cn } from "@/lib/utils";
 import { RecurringForm, RecurringList } from "@/components/finance/recurring-form";
 import { CategoryIcon } from "@/lib/finance/icons";
 import { GoalsPanel } from "@/components/finance/goals-panel";
+import { FaqPanel } from "@/components/finance/faq";
+import { RestartTourButton } from "@/components/finance/onboarding-tour";
 
 export const Route = createFileRoute("/settings")({ component: Page });
 
@@ -542,7 +544,20 @@ function Inner() {
           onDelete={(id) => mut.deleteCat.mutate({ id })}
         />
 
-        {/* 6. Уведомления */}
+        {/* 6. FAQ и обучение */}
+        <FaqPanel />
+        <Card>
+          <h2 className="font-display text-lg">Обучение</h2>
+          <p className="mt-1 text-xs text-muted">
+            Короткий интерактивный тур по главным экранам — полезно после
+            обновления или если что-то забыли.
+          </p>
+          <div className="mt-3">
+            <RestartTourButton />
+          </div>
+        </Card>
+
+        {/* 7. Уведомления */}
         <Card>
           <h2 className="font-display text-lg">Уведомления о лимите</h2>
           <ul className="mt-2 space-y-1.5 text-sm text-muted">
@@ -560,7 +575,7 @@ function Inner() {
           </p>
         </Card>
 
-        {/* 7. Опасная зона — свёрнута по умолчанию, в самом низу */}
+        {/* 8. Опасная зона — свёрнута по умолчанию, в самом низу */}
         <Card className="border-border/60">
           <button
             type="button"

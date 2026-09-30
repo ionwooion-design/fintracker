@@ -13,6 +13,7 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useFinance, useFinanceMutations } from "@/lib/finance/use-finance";
 import { cn } from "@/lib/utils";
 import { AchievementUnlockWatcher } from "@/components/finance/achievement-unlock";
+import { OnboardingTour } from "@/components/finance/onboarding-tour";
 
 const TABS = [
   { to: "/", label: "Главная", icon: Home },
@@ -47,6 +48,7 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col bg-bg">
       <AchievementUnlockWatcher snapshot={snapshot} />
+      <OnboardingTour />
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border glass px-4 py-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">FinTracker PRO</p>
